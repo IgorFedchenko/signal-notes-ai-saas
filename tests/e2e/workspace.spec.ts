@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { mkdirSync } from "node:fs";
-import { randomUUID } from "node:crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 if (supabaseUrl !== "http://127.0.0.1:56321")
@@ -48,7 +47,12 @@ test("signed-out visitors cannot open the workspace or mutate data", async ({
 test("signup → private note → summary → history → quota limit → delete → logout", async ({
   page,
 }, testInfo) => {
-  const email = `e2e-${randomUUID()}@signal.local`;
+  const email = `demo-${testInfo.project.name}@signal.local`;
+  const existing = await admin.auth.admin.listUsers();
+  const old = existing.data.users.find(
+    (candidate) => candidate.email === email,
+  );
+  if (old) await admin.auth.admin.deleteUser(old.id);
   await page.goto("/login?mode=signup");
   await page.getByLabel("Email address").fill(email);
   await page
@@ -97,10 +101,6 @@ test("signup → private note → summary → history → quota limit → delete
   await expect(page.locator(".demo-banner")).toContainText("Local demo");
   mkdirSync("docs/screenshots", { recursive: true });
   if (testInfo.project.name === "chromium") {
-    // Screenshot only a fixed synthetic demo identity; random signup address stays private.
-    await page.locator(".account span").evaluate((node) => {
-      node.textContent = "demo@signal.local";
-    });
     await page.screenshot({
       path: "docs/screenshots/workspace.png",
       fullPage: true,

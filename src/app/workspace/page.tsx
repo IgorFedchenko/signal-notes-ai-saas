@@ -17,7 +17,7 @@ export default async function WorkspacePage() {
     db
       .from("generations")
       .select(
-        "request_id,note_id,summary,provider,status,period,input_tokens,output_tokens,created_at,expires_at",
+        "request_id,note_id,summary,provider,status,period,input_tokens,output_tokens,created_at,expires_at,result,estimated_micro_usd,exposure_micro_usd,cost_status,latency_ms,trace_id,config,contract_version",
       )
       .order("created_at", { ascending: false })
       .limit(200),
@@ -28,11 +28,10 @@ export default async function WorkspacePage() {
       .single(),
     db
       .from("generations")
-      .select("input_tokens,output_tokens")
-      .eq("period", periodStart())
-      .or(
-        `status.eq.succeeded,and(status.eq.reserved,expires_at.gt.${new Date().toISOString()})`,
-      ),
+      .select(
+        "input_tokens,output_tokens,exposure_micro_usd,status,expires_at,attempt_started",
+      )
+      .eq("period", periodStart()),
   ]);
   if (notes.error || generations.error || account.error || monthly.error)
     throw new Error("Workspace is temporarily unavailable");
@@ -43,7 +42,22 @@ export default async function WorkspacePage() {
       generations={generations.data}
       account={account.data}
       monthlyUsage={{
-        used: monthly.data.length,
+        used: monthly.data.filter(
+          (row) =>
+            row.status === "succeeded" ||
+            (row.status === "reserved" &&
+              new Date(row.expires_at) > new Date()),
+        ).length,
+        exposureMicroUsd: monthly.data.reduce(
+          (sum, row) =>
+            sum +
+            (row.status === "reserved" &&
+            !row.attempt_started &&
+            new Date(row.expires_at) <= new Date()
+              ? 0
+              : (row.exposure_micro_usd ?? 0)),
+          0,
+        ),
         tokens: monthly.data.reduce(
           (sum, row) => sum + row.input_tokens + row.output_tokens,
           0,

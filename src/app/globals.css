@@ -1655,3 +1655,47 @@ small {
     transition: none !important;
   }
 }
+
+.takeaway {
+  margin-bottom: 12px;
+}
+.takeaway p {
+  margin: 0;
+}
+.takeaway details {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.takeaway summary {
+  cursor: pointer;
+}
+.takeaway blockquote {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 2px solid currentColor;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.generation-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 16px 0;
+  font-size: 11px;
+}
+.generation-metrics dt {
+  color: var(--muted);
+}
+.generation-metrics dd {
+  margin: 3px 0;
+}
+.generation-metrics .trace {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+.table-row small {
+  display: block;
+  font-size: 10px;
+  margin-top: 4px;
+}
