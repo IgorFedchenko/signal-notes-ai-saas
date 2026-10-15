@@ -43,6 +43,7 @@ it("rejects inherited hosted/live overrides before launcher processes or sockets
     STRIPE_SECRET_KEY: "sk_live_synthetic",
     OPENAI_API_KEY: "synthetic-key",
     AI_LIVE_APPROVED: "true",
+    NODE_ENV: "test",
   })) {
     const fakeProcess = {
       argv: [],
@@ -101,6 +102,7 @@ it("constructs one controlled child environment from verified local stack values
   });
   expect(env).toMatchObject({
     ...local,
+    NODE_ENV: "development",
     AI_PROVIDER: "fixture",
     AI_LIVE_APPROVED: "false",
     APP_URL: "http://127.0.0.1:3210",
@@ -112,4 +114,18 @@ it("constructs one controlled child environment from verified local stack values
   expect(localAppEnvironment(true, {}).OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBe(
     "http://127.0.0.1:56006/v1/traces",
   );
+});
+
+it("accepts only unset or development dotenv mode before reading any owner file", () => {
+  for (const mode of ["test", "production", "custom", ""]) {
+    expect(() => assertBootstrapEnvironment({ NODE_ENV: mode })).toThrow(
+      "local_environment_mode",
+    );
+  }
+  expect(existsSync).not.toHaveBeenCalled();
+  expect(readFileSync).not.toHaveBeenCalled();
+  expect(() => assertBootstrapEnvironment({})).not.toThrow();
+  expect(() =>
+    assertBootstrapEnvironment({ NODE_ENV: "development" }),
+  ).not.toThrow();
 });
