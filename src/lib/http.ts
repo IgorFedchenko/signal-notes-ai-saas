@@ -22,7 +22,7 @@ export function sameOrigin(request: Request) {
   if (request.headers.get("origin") !== expected)
     throw new HttpError(403, "Request origin rejected.");
 }
-export async function readJson(request: Request) {
+export async function readText(request: Request, limit = 65536) {
   // Bound the stream, including chunked requests that omit Content-Length.
   const reader = request.body?.getReader();
   if (!reader) throw new HttpError(400, "Request body is required.");
@@ -32,7 +32,7 @@ export async function readJson(request: Request) {
     const { value, done } = await reader.read();
     if (done) break;
     bytes += value.length;
-    if (bytes > 65536) {
+    if (bytes > limit) {
       await reader.cancel();
       throw new HttpError(413, "Request is too large.");
     }
@@ -44,8 +44,12 @@ export async function readJson(request: Request) {
     body.set(chunk, offset);
     offset += chunk.length;
   }
+  return new TextDecoder().decode(body);
+}
+export async function readJson(request: Request) {
+  const text = await readText(request);
   try {
-    return JSON.parse(new TextDecoder().decode(body));
+    return JSON.parse(text);
   } catch {
     throw new HttpError(400, "Invalid JSON.");
   }

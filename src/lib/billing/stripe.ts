@@ -14,7 +14,9 @@ export function stripeClient() {
 export function billingReady() {
   return Boolean(
     process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") &&
-    process.env.STRIPE_PRO_PRICE_ID,
+    process.env.STRIPE_PRO_PRICE_ID &&
+    process.env.STRIPE_WEBHOOK_SECRET &&
+    process.env.SUPABASE_DB_URL,
   );
 }
 export function verifyEvent(payload: string, signature: string) {

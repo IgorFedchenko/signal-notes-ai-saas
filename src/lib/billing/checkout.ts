@@ -43,7 +43,16 @@ export async function checkoutForUser(
         account.checkout_session_id,
       );
       if (previous.status === "open" && previous.url) return previous.url;
-      if (previous.status === "complete")
+      const previousSubscription =
+        typeof previous.subscription === "string"
+          ? previous.subscription
+          : previous.subscription?.id;
+      const previousEnded = existing.data.some(
+        (s) =>
+          s.id === previousSubscription &&
+          ["canceled", "incomplete_expired"].includes(s.status),
+      );
+      if (previous.status === "complete" && !previousEnded)
         throw new HttpError(
           409,
           "Checkout is being finalized. Refresh your plan shortly.",

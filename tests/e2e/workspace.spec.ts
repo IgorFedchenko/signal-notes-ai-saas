@@ -93,7 +93,7 @@ test("signup → private note → summary → history → quota limit → delete
   await expect(page.locator(".summary-text")).toContainText(
     "Maya owns onboarding",
   );
-  await expect(page.getByText("Local demo", { exact: true })).toBeVisible();
+  await expect(page.locator(".demo-banner")).toContainText("Local demo");
   mkdirSync("docs/screenshots", { recursive: true });
   if (testInfo.project.name === "chromium") {
     // Screenshot only a fixed synthetic demo identity; random signup address stays private.

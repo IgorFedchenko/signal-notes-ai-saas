@@ -333,6 +333,17 @@ describe("transactional Stripe reconciliation", () => {
 });
 
 describe("serialized checkout sessions", () => {
+  it("ignores an unknown customer without fetching Stripe or granting access", async () => {
+    const read = vi.fn();
+    expect(
+      await reconcileEvent(
+        { id: `evt_${prefix}_unknown`, type: "customer.subscription.created" },
+        `${customer}_unknown`,
+        read,
+      ),
+    ).toEqual({ duplicate: false, ignored: true });
+    expect(read).not.toHaveBeenCalled();
+  });
   it("reuses an open hosted session across concurrent clicks and rejects existing subscriptions", async () => {
     const subscriptions = vi
       .fn()
@@ -366,6 +377,46 @@ describe("serialized checkout sessions", () => {
       await expect(checkoutForUser(stripe, { id: ids[0] })).rejects.toThrow(
         "already have a subscription",
       );
+    } finally {
+      process.env.STRIPE_PRO_PRICE_ID = oldPrice;
+    }
+  });
+  it("allows a fresh checkout after the previous subscription has ended", async () => {
+    const subscriptions = vi
+      .fn()
+      .mockResolvedValue({
+        data: [{ id: "sub_ended", status: "canceled" }],
+        has_more: false,
+      });
+    const create = vi
+      .fn()
+      .mockResolvedValue({
+        id: `cs_${prefix}_renew`,
+        url: "https://checkout.stripe.com/synthetic-renewal",
+      });
+    const stripe = {
+      subscriptions: { list: subscriptions },
+      checkout: {
+        sessions: {
+          retrieve: vi
+            .fn()
+            .mockResolvedValue({
+              status: "complete",
+              subscription: "sub_ended",
+            }),
+          create,
+        },
+      },
+    } as unknown as Stripe;
+    const oldPrice = process.env.STRIPE_PRO_PRICE_ID;
+    process.env.STRIPE_PRO_PRICE_ID = "price_fixture";
+    try {
+      expect(await checkoutForUser(stripe, { id: ids[0] })).toBe(
+        "https://checkout.stripe.com/synthetic-renewal",
+      );
+      expect(create).toHaveBeenCalledWith(expect.anything(), {
+        idempotencyKey: `checkout:${ids[0]}:cs_${prefix}`,
+      });
     } finally {
       process.env.STRIPE_PRO_PRICE_ID = oldPrice;
     }

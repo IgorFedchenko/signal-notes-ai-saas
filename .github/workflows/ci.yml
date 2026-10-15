@@ -21,6 +21,7 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npm audit --audit-level=high
       - run: npm run check
       - name: Start isolated Supabase and seed synthetic data
         run: npm run local:setup

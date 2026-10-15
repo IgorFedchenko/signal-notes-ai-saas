@@ -726,6 +726,7 @@ small {
   font-weight: 500;
 }
 .account span {
+  white-space: nowrap;
   display: block;
   max-width: 112px;
   overflow: hidden;

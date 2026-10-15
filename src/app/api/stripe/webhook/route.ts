@@ -5,15 +5,14 @@ import {
   currentSubscription,
 } from "@/lib/billing/stripe";
 import { reconcileEvent } from "@/lib/billing/store";
-import { failure, HttpError } from "@/lib/http";
+import { failure, HttpError, readText } from "@/lib/http";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(request: Request) {
   try {
     if (Number(request.headers.get("content-length") ?? 0) > 262144)
       throw new HttpError(413, "Webhook too large.");
-    const raw = await request.text();
-    if (raw.length > 262144) throw new HttpError(413, "Webhook too large.");
+    const raw = await readText(request, 262144);
     const event = verifyEvent(
       raw,
       request.headers.get("stripe-signature") ?? "",
