@@ -1,11 +1,14 @@
 import "server-only";
 import { userClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { ProviderError } from "./ai/schema";
+import { safeLog } from "./observability/log";
 
 export class HttpError extends Error {
   constructor(
     public status: number,
     message: string,
+    public code = "request_rejected",
   ) {
     super(message);
   }
@@ -56,18 +59,34 @@ export async function readJson(request: Request) {
 }
 export function failure(error: unknown) {
   if (error instanceof HttpError)
-    return Response.json({ error: error.message }, { status: error.status });
+    return Response.json(
+      { error: error.message, code: error.code },
+      { status: error.status },
+    );
+  if (error instanceof ProviderError) {
+    safeLog("request_failed", { code: error.code });
+    return Response.json(
+      {
+        error:
+          error.code === "ai_unconfigured"
+            ? "AI is not configured for approved use."
+            : "The summary could not be completed. Start a new attempt.",
+        code: error.code,
+      },
+      { status: 503 },
+    );
+  }
   if (error instanceof z.ZodError)
     return Response.json(
-      { error: error.issues[0]?.message ?? "Invalid input." },
+      { error: "Invalid input.", code: "invalid_input" },
       { status: 400 },
     );
-  // Do not log user content, keys, provider responses, or DB connection strings.
-  console.error("request_failed", {
-    category: error instanceof Error ? error.name : "unknown",
-  });
+  safeLog("request_failed", { code: "temporarily_unavailable" });
   return Response.json(
-    { error: "Something went wrong. Please try again." },
+    {
+      error: "Something went wrong. Please try again.",
+      code: "temporarily_unavailable",
+    },
     { status: 503 },
   );
 }
