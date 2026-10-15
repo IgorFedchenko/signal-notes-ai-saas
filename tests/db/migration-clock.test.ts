@@ -3,7 +3,7 @@ import postgres from "postgres";
 import { randomUUID, createHash } from "node:crypto";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { generationConfig } from "@/lib/ai/pricing";
+import { generationConfig, MODEL_PRICES } from "@/lib/ai/pricing";
 
 const dsn = process.env.SUPABASE_DB_URL!;
 if (new URL(dsn).port !== "56322")
@@ -67,9 +67,10 @@ async function reserve(
   db: ReturnType<typeof postgres>,
   f: { id: string; note: string },
   id = randomUUID(),
+  amount = 0,
 ) {
   const [row] =
-    await db`select reserve_generation_v2(${f.id}::uuid,${f.note}::uuid,${id}::uuid,${db.json(config())},0,${"a".repeat(32)}) as result`;
+    await db`select reserve_generation_v2(${f.id}::uuid,${f.note}::uuid,${id}::uuid,${db.json(amount ? { ...config(), ...MODEL_PRICES["gpt-5.4-mini-2026-03-17"], model: "gpt-5.4-mini-2026-03-17" } : config())},${amount},${"a".repeat(32)}) as result`;
   return { id, ...row.result };
 }
 async function begin(
@@ -218,24 +219,31 @@ describe("T13 SQL UTC-month clock seam isolated to disposable database", () => {
       await apply();
       await db`set timezone='Pacific/Kiritimati'`;
       await db`select set_config('signal.test_now','2026-12-31T23:59:50Z',false)`;
-      const f = await owner(db),
-        r = await reserve(db, f),
-        unknown = await reserve(db, f);
-      await db`update generations set expires_at='2027-01-01T00:01:50Z' where user_id=${f.id}`;
+      const f = await owner(db);
+      const r = await reserve(db, f, randomUUID(), 5000);
+      expect(r.kind).toBe("reserved");
+      // Expiry defaults use the real DB clock. Advance each test-owned row before
+      // the next reservation can run cleanup under the simulated SQL clock.
+      await db`update generations set expires_at='2027-01-01T00:01:50Z' where user_id=${f.id} and request_id=${r.id}`;
+      const unknown = await reserve(db, f, randomUUID(), 5000);
+      expect(unknown.kind).toBe("reserved");
+      await db`update generations set expires_at='2027-01-01T00:01:50Z' where user_id=${f.id} and request_id=${unknown.id}`;
       expect((await begin(db, f.id, unknown.id)).period).toBe("2026-12-01");
       await db`select set_config('signal.test_now','2027-01-01T00:00:10Z',false)`;
       const ack = await begin(db, f.id, r.id);
+      expect(ack.kind).toBe("attempt");
       expect(ack.period).toBe("2026-12-01");
       expect((await finish(db, f.id, r.id)).kind).toBe("succeeded");
       await db`select fail_generation_v2(${f.id}::uuid,${unknown.id}::uuid)`;
       const next = await reserve(db, f);
       expect(next.kind).toBe("reserved");
+      await db`update generations set expires_at='2027-01-01T00:02:10Z' where user_id=${f.id} and request_id=${next.id}`;
       expect((await reserve(db, f, r.id)).kind).toBe("cached");
       const rows =
-        await db`select period::text,count(*)filter(where status in('succeeded','reserved'))::int as c,count(*)filter(where cost_status='unknown')::int as unknown from generations where user_id=${f.id} group by period order by period`;
+        await db`select period::text,count(*)filter(where status in('succeeded','reserved'))::int as c,count(*)filter(where cost_status='unknown')::int as unknown,coalesce(sum(exposure_micro_usd),0)::int as e from generations where user_id=${f.id} group by period order by period`;
       expect(rows).toEqual([
-        { period: "2026-12-01", c: 1, unknown: 1 },
-        { period: "2027-01-01", c: 1, unknown: 0 },
+        { period: "2026-12-01", c: 1, unknown: 1, e: 5000 },
+        { period: "2027-01-01", c: 1, unknown: 0, e: 0 },
       ]);
       const functionBody = (
         await db`select prosrc from pg_proc where proname='reserve_generation_v2'`

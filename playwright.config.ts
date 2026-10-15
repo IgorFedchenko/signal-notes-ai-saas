@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: "http://127.0.0.1:3210",
-    trace: "retain-on-failure",
+    trace: "on",
     screenshot: "only-on-failure",
   },
   projects: [

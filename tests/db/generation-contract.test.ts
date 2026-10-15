@@ -1,6 +1,9 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import postgres from "postgres";
+import { createServer } from "node:http";
+import { summarize as actualProvider } from "@/lib/ai/provider";
+import { reservationCost } from "@/lib/ai/pricing";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { generationConfig, MODEL_PRICES } from "@/lib/ai/pricing";
@@ -127,6 +130,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 afterAll(async () => {
   mkdirSync("test-results", { recursive: true });
@@ -554,3 +558,85 @@ describe("T15 direct JWT deletion and two-connection late finalizers", () => {
     }
   });
 });
+
+it("T12 actual 25-second local HTTP provider timeout retains nonzero exposure and executes only once", async () => {
+  const f = await fixture(),
+    id = randomUUID();
+  let calls = 0;
+  const server = createServer(() => {
+    calls++; /* deliberately no response */
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string")
+    throw Error("Local contract server required");
+  const fetchOriginal = globalThis.fetch;
+  const endpoint = `http://127.0.0.1:${address.port}`;
+  vi.stubGlobal(
+    "fetch",
+    (input: string | URL | Request, init?: RequestInit) => {
+      const target =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (target === "https://api.openai.com/v1/chat/completions")
+        return fetchOriginal(endpoint, init);
+      if (new URL(target).hostname !== "127.0.0.1")
+        throw Error("Contract lane prohibits external network");
+      return fetchOriginal(input, init);
+    },
+  );
+  vi.stubEnv("APP_URL", "http://127.0.0.1:3210");
+  vi.stubEnv("AI_PROVIDER", "openai");
+  vi.stubEnv("OPENAI_MODEL", "gpt-5.4-mini-2026-03-17");
+  vi.stubEnv("OPENAI_API_KEY", "synthetic-loopback-contract-only");
+  vi.stubEnv("AI_LIVE_APPROVED", "true");
+  const bound = generationConfig(),
+    maximum = reservationCost(source, bound);
+  vi.mocked(identity).mockResolvedValue({
+    db: f.client,
+    user: { id: f.id },
+  } as Awaited<ReturnType<typeof identity>>);
+  vi.mocked(adminClient).mockReturnValue(admin);
+  vi.mocked(summarize).mockImplementation(actualProvider);
+  try {
+    const started = performance.now();
+    const response = await POST(
+      new Request("http://127.0.0.1:3210/api/summarize", {
+        method: "POST",
+        headers: {
+          Origin: "http://127.0.0.1:3210",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ noteId: f.note, requestId: id }),
+      }),
+    );
+    const elapsedMs = Math.round(performance.now() - started);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      code: "provider_unavailable",
+    });
+    expect(calls).toBe(1);
+    expect(elapsedMs).toBeGreaterThanOrEqual(24000);
+    expect(elapsedMs).toBeLessThan(32000);
+    expect(await ledger(f)).toMatchObject({ c: 0, e: maximum });
+    expect(await row(f, id)).toMatchObject({
+      status: "failed",
+      cost_status: "unknown",
+      summary: null,
+      result: null,
+    });
+    evidence.push({
+      label: "actual-loopback-25s-timeout",
+      calls,
+      elapsedMs,
+      maximum,
+      ledger: await ledger(f),
+    });
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}, 45000);
