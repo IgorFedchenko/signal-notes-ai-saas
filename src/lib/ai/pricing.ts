@@ -70,7 +70,7 @@ export function generationConfig(): BoundConfig {
       (!process.env.OPENAI_API_KEY || process.env.AI_LIVE_APPROVED !== "true"))
   )
     throw new ProviderError("ai_unconfigured");
-  return boundConfigSchema.parse({
+  const parsed = boundConfigSchema.safeParse({
     ...price,
     model,
     inputCap: Number(process.env.AI_INPUT_BYTE_CAP ?? 65536),
@@ -79,6 +79,8 @@ export function generationConfig(): BoundConfig {
     promptHash: PROMPT_HASH,
     schemaVersion: SCHEMA_VERSION,
   });
+  if (!parsed.success) throw new ProviderError("ai_unconfigured");
+  return parsed.data;
 }
 export function reservationCost(content: string, config: BoundConfig) {
   const bytes = Buffer.byteLength(

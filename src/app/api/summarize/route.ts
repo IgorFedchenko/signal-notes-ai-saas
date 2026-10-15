@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { errorCode } from "@/lib/error-codes";
 import { identity, sameOrigin, readJson, failure, HttpError } from "@/lib/http";
 import { adminClient } from "@/lib/supabase/admin";
 import { summarize } from "@/lib/ai";
@@ -9,7 +10,7 @@ import {
 } from "@/lib/ai/pricing";
 import { parseSummary } from "@/lib/ai/schema";
 import { safeLog } from "@/lib/observability/log";
-import { traced } from "@/lib/observability/tracing";
+import { flushTelemetry, traced } from "@/lib/observability/tracing";
 export const maxDuration = 60;
 const generationSchema = z.object({
   summary: z.string().nullable(),
@@ -20,11 +21,16 @@ const generationSchema = z.object({
   estimated_micro_usd: z.number().int().nonnegative().nullable(),
   latency_ms: z.number().int().nonnegative().nullable(),
   trace_id: z.string().nullable(),
-  config: boundConfigSchema.nullable(),
+  config: z.object({ promptVersion: z.string() }).nullable(),
   contract_version: z.string(),
 });
+function databaseValue<T>(schema: z.ZodType<T>, value: unknown): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new Error("invalid_database_reply");
+  return parsed.data;
+}
 function responseGeneration(value: unknown, content: string, cached: boolean) {
-  const row = generationSchema.parse(value);
+  const row = databaseValue(generationSchema, value);
   if (row.contract_version === "v2") parseSummary(row.result, content);
   return Response.json({
     summary: row.summary,
@@ -64,7 +70,7 @@ function reject(kind: string): never {
     503,
     "Could not persist the summary.",
   ];
-  throw new HttpError(status, message, kind);
+  throw new HttpError(status, message, errorCode(kind));
 }
 export async function POST(request: Request) {
   try {
@@ -80,16 +86,23 @@ export async function POST(request: Request) {
       .eq("id", noteId)
       .single();
     if (noteError || !note) reject("not_found");
-    const config = generationConfig();
-    const reserved = reservationCost(note.content, config);
+    // A cached success remains readable even when live generation is disabled.
+    let config: ReturnType<typeof generationConfig> | null = null;
+    let configurationError: unknown;
+    try {
+      config = generationConfig();
+    } catch (error) {
+      configurationError = error;
+    }
+    const reserved = config ? reservationCost(note.content, config) : 0;
     const admin = adminClient();
     return await traced(
       "generation",
       undefined,
       {
         "request.id": requestId,
-        model: config.model,
-        "prompt.version": config.promptVersion,
+        model: config?.model ?? "unconfigured",
+        "prompt.version": config?.promptVersion ?? "unconfigured",
       },
       async (root) => {
         let release = false;
@@ -104,10 +117,15 @@ export async function POST(request: Request) {
               p_reserved: reserved,
               p_trace: traceId,
             });
-            if (error) throw new Error("reservation_failed");
-            return z
-              .object({ kind: z.string(), generation: z.unknown().optional() })
-              .parse(data);
+            if (error)
+              throw configurationError ?? new Error("reservation_failed");
+            return databaseValue(
+              z.object({
+                kind: z.string(),
+                generation: z.unknown().optional(),
+              }),
+              data,
+            );
           });
           if (reservation.kind === "cached")
             return responseGeneration(
@@ -117,22 +135,26 @@ export async function POST(request: Request) {
             );
           if (reservation.kind !== "reserved") reject(reservation.kind);
           release = true;
+          const gateStarted = performance.now();
           const { data, error } = await admin.rpc(
             "begin_generation_attempt_v2",
             { p_user: user.id, p_request: requestId },
           );
           if (error) throw new Error("attempt_ack_failed");
-          const ack = z
-            .object({
+          const ack = databaseValue(
+            z.object({
               kind: z.string(),
               config: z.unknown().optional(),
               period: z.string().optional(),
               reservedMicroUsd: z.number().optional(),
               traceId: z.string().optional(),
-            })
-            .parse(data);
+              databaseNow: z.string().optional(),
+              expiresAt: z.string().optional(),
+            }),
+            data,
+          );
           if (ack.kind !== "attempt") reject(ack.kind);
-          const bound = boundConfigSchema.parse(ack.config);
+          const bound = databaseValue(boundConfigSchema, ack.config);
           if (
             !ack.period ||
             ack.reservedMicroUsd === undefined ||
@@ -140,12 +162,24 @@ export async function POST(request: Request) {
             reservationCost(note.content, bound) > ack.reservedMicroUsd
           )
             throw new Error("attempt_ack_invalid");
+          // Anchor remaining DB TTL to the monotonic time BEFORE the RPC. A late
+          // acknowledgement cannot extend the permit or authorize an expired call.
+          const remaining =
+            Date.parse(ack.expiresAt ?? "") - Date.parse(ack.databaseNow ?? "");
+          const deadline = gateStarted + remaining;
+          if (
+            !Number.isFinite(remaining) ||
+            remaining <= 0 ||
+            remaining > 120000 ||
+            performance.now() >= deadline
+          )
+            reject("attempt_denied");
           // Only this positively acknowledged CAS winner may reach the network.
           const result = await traced(
             "provider",
             root,
             { model: bound.model, "prompt.version": bound.promptVersion },
-            () => summarize(note.content, bound),
+            () => summarize(note.content, bound, deadline),
           );
           parseSummary(result.result, note.content);
           const finished = await traced("persist", root, {}, async () => {
@@ -158,13 +192,17 @@ export async function POST(request: Request) {
               p_latency: result.latencyMs,
             });
             if (error) throw new Error("persist_failed");
-            return z
-              .object({ kind: z.string(), generation: z.unknown().optional() })
-              .parse(data);
+            return databaseValue(
+              z.object({
+                kind: z.string(),
+                generation: z.unknown().optional(),
+              }),
+              data,
+            );
           });
           if (finished.kind !== "succeeded") reject(finished.kind);
           release = false;
-          const row = generationSchema.parse(finished.generation);
+          const row = databaseValue(generationSchema, finished.generation);
           root.setAttributes({
             "input.tokens": result.inputTokens,
             "output.tokens": result.outputTokens,
@@ -199,5 +237,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     return failure(error);
+  } finally {
+    await flushTelemetry();
   }
 }

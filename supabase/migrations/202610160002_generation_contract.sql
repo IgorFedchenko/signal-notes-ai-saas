@@ -49,19 +49,6 @@ declare
   consumed integer;
   exposed bigint;
 begin
-  if p_reserved is null or p_reserved < 0 or p_reserved > 2000000
-    or p_config is null or p_config->>'provider' not in ('fixture', 'openai')
-    or coalesce((p_config->>'inputCap')::int, 0) not between 1 and 65536
-    or coalesce((p_config->>'outputCap')::int, 0) not between 1 and 2000
-    or coalesce((p_config->>'inputRate')::numeric, -1) not between 0 and 1000
-    or coalesce((p_config->>'outputRate')::numeric, -1) not between 0 and 1000
-    or coalesce(length(p_config->>'model'), 0) not between 1 and 100
-    or coalesce(length(p_config->>'promptHash'), 0) <> 64
-    or p_trace is null or p_trace !~ '^[0-9a-f]{32}$'
-    or (p_config->>'provider' = 'fixture' and
-      (p_reserved <> 0 or (p_config->>'inputRate')::numeric <> 0 or (p_config->>'outputRate')::numeric <> 0)) then
-    raise exception 'invalid_generation_config';
-  end if;
   perform pg_advisory_xact_lock(hashtextextended(p_user::text, 1));
   -- Lock order throughout the content lifecycle: note, then generation.
   perform 1 from public.notes where id = p_note and user_id = p_user for share;
@@ -77,6 +64,19 @@ begin
       return jsonb_build_object('kind', 'cached', 'generation', to_jsonb(existing));
     end if;
     return jsonb_build_object('kind', case when existing.status = 'reserved' then 'pending' else 'failed' end);
+  end if;
+  if p_reserved is null or p_reserved < 0 or p_reserved > 2000000
+    or p_config is null or p_config->>'provider' not in ('fixture', 'openai')
+    or coalesce((p_config->>'inputCap')::int, 0) not between 1 and 65536
+    or coalesce((p_config->>'outputCap')::int, 0) not between 1 and 2000
+    or coalesce((p_config->>'inputRate')::numeric, -1) not between 0 and 1000
+    or coalesce((p_config->>'outputRate')::numeric, -1) not between 0 and 1000
+    or coalesce(length(p_config->>'model'), 0) not between 1 and 100
+    or coalesce(length(p_config->>'promptHash'), 0) <> 64
+    or p_trace is null or p_trace !~ '^[0-9a-f]{32}$'
+    or (p_config->>'provider' = 'fixture' and
+      (p_reserved <> 0 or (p_config->>'inputRate')::numeric <> 0 or (p_config->>'outputRate')::numeric <> 0)) then
+    raise exception 'invalid_generation_config';
   end if;
   select * into account from public.billing_accounts where user_id = p_user;
   if account.plan = 'pro' and account.status in ('active', 'trialing') and account.period_end > clock_timestamp() then
@@ -111,7 +111,8 @@ begin
   if not found then return jsonb_build_object('kind', 'attempt_denied'); end if;
   -- An explicit acknowledged response is the ONLY permission to call the provider.
   return jsonb_build_object('kind', 'attempt', 'config', row.config,
-    'period', row.period, 'reservedMicroUsd', row.reserved_micro_usd, 'traceId', row.trace_id);
+    'period', row.period, 'reservedMicroUsd', row.reserved_micro_usd, 'traceId', row.trace_id,
+    'databaseNow', clock_timestamp(), 'expiresAt', row.expires_at);
 end;
 $$;
 

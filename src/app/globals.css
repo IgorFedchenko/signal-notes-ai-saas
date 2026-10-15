@@ -1699,3 +1699,12 @@ small {
   font-size: 10px;
   margin-top: 4px;
 }
+
+.activity-metadata {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  min-width: 0;
+}
+.activity-metadata summary {
+  cursor: pointer;
+}

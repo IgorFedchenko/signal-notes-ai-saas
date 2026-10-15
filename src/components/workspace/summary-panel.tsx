@@ -1,5 +1,6 @@
+import { GenerationMetrics } from "./generation-metrics";
 import { Check, LoaderCircle, Sparkles } from "lucide-react";
-import { dollars, type SummaryAnswer } from "./types";
+import { type SummaryAnswer } from "./types";
 export function SummaryPanel({
   answer,
   fixture,
@@ -49,36 +50,7 @@ export function SummaryPanel({
             <Check size={13} />
             Saved to your workspace <span>{answer.provider}</span>
           </div>
-          <dl className="generation-metrics">
-            <div>
-              <dt>Model tokens</dt>
-              <dd>{answer.inputTokens + answer.outputTokens}</dd>
-            </div>
-            <div>
-              <dt>Estimated token cost</dt>
-              <dd>
-                {answer.estimatedMicroUsd === null
-                  ? "Unknown (legacy)"
-                  : dollars(answer.estimatedMicroUsd)}
-              </dd>
-            </div>
-            <div>
-              <dt>Latency</dt>
-              <dd>
-                {answer.latencyMs === null
-                  ? "Unknown"
-                  : `${answer.latencyMs} ms`}
-              </dd>
-            </div>
-            <div>
-              <dt>Prompt</dt>
-              <dd>{answer.promptVersion}</dd>
-            </div>
-            <div className="trace">
-              <dt>Trace ID</dt>
-              <dd>{answer.traceId ?? "Unavailable (legacy)"}</dd>
-            </div>
-          </dl>
+          <GenerationMetrics {...answer} />
         </>
       ) : (
         <div className="summary-empty">

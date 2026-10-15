@@ -1,6 +1,7 @@
+import { errorCode, type ErrorCode } from "@/lib/error-codes";
 export class ApiError extends Error {
   constructor(
-    public code: string,
+    public code: ErrorCode,
     message: string,
   ) {
     super(message);
@@ -14,9 +15,6 @@ export async function call(path: string, body: unknown, method = "POST") {
   });
   const data = await response.json();
   if (!response.ok)
-    throw new ApiError(
-      data.code ?? "temporarily_unavailable",
-      data.error ?? "Please try again.",
-    );
+    throw new ApiError(errorCode(data.code), data.error ?? "Please try again.");
   return data;
 }

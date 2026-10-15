@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { providerJson } from "./transport";
 import { completionBody } from "./prompt";
 import { generationConfig, reservationCost, type BoundConfig } from "./pricing";
 import {
@@ -73,9 +74,15 @@ const responseSchema = z.object({
 export async function summarize(
   content: string,
   config: BoundConfig = generationConfig(),
+  attemptDeadline?: number,
 ): Promise<Summary> {
   reservationCost(content, config);
   const started = performance.now();
+  const remaining =
+    attemptDeadline === undefined
+      ? 25000
+      : Math.floor(attemptDeadline - performance.now());
+  if (remaining <= 0) throw new ProviderError("provider_unavailable");
   if (config.provider === "fixture")
     return {
       ...fixtureSummary(content),
@@ -88,7 +95,7 @@ export async function summarize(
     // One request, no automatic retries. Timeout may still incur provider cost.
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(Math.min(25000, remaining)),
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json",
@@ -98,7 +105,7 @@ export async function summarize(
       ),
     });
     if (!response.ok) throw new ProviderError("provider_unavailable");
-    const parsed = responseSchema.safeParse(await response.json());
+    const parsed = responseSchema.safeParse(await providerJson(response));
     if (!parsed.success) throw new ProviderError("provider_invalid");
     data = parsed.data;
   } catch (error) {
@@ -107,7 +114,8 @@ export async function summarize(
       : new ProviderError("provider_unavailable");
   }
   const choice = data.choices[0];
-  if (choice.message.refusal) throw new ProviderError("provider_refused");
+  if (choice.message.refusal || choice.finish_reason === "content_filter")
+    throw new ProviderError("provider_refused");
   if (choice.finish_reason === "length")
     throw new ProviderError("provider_truncated");
   if (

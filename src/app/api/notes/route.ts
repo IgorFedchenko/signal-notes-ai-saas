@@ -1,9 +1,15 @@
 import { z } from "zod";
 import { identity, sameOrigin, readJson, failure, HttpError } from "@/lib/http";
-const schema = z.object({
-  title: z.string().trim().min(1).max(120),
-  content: z.string().trim().min(20, "Add at least 20 characters.").max(12000),
-});
+const schema = z
+  .object({
+    title: z.string().trim().min(1).max(120),
+    content: z
+      .string()
+      .trim()
+      .min(20, "Add at least 20 characters.")
+      .max(12000),
+  })
+  .strict();
 export async function POST(request: Request) {
   try {
     sameOrigin(request);

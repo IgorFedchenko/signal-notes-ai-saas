@@ -1,3 +1,4 @@
+import { GenerationMetrics } from "./generation-metrics";
 import { ArrowDownLeft, ArrowRight, Sparkles } from "lucide-react";
 import { dollars, type Generation, type Note } from "./types";
 export function UsagePanel({
@@ -15,7 +16,6 @@ export function UsagePanel({
   plan: "free" | "pro";
   onNotes: () => void;
 }) {
-  const completed = generations;
   return (
     <section className="activity-panel">
       <div className="panel-heading">
@@ -28,7 +28,7 @@ export function UsagePanel({
         Estimated monthly exposure: {dollars(exposureMicroUsd)} /{" "}
         {plan === "pro" ? "$2.00" : "$0.10"}. Legacy costs remain unknown.
       </p>
-      {completed.length === 0 ? (
+      {generations.length === 0 ? (
         <div className="empty-state">
           <Sparkles size={28} />
           <h3>A fresh start.</h3>
@@ -45,7 +45,7 @@ export function UsagePanel({
             <span>TOKENS</span>
             <span>CREATED</span>
           </div>
-          {completed.map((g) => (
+          {generations.map((g) => (
             <div className="table-row" key={g.request_id}>
               <span>
                 <ArrowDownLeft size={15} />
@@ -71,6 +71,17 @@ export function UsagePanel({
                 </small>
               </span>
               <span>{new Date(g.created_at).toLocaleDateString("en-US")}</span>
+              <details className="activity-metadata">
+                <summary>Run details</summary>
+                <GenerationMetrics
+                  inputTokens={g.input_tokens}
+                  outputTokens={g.output_tokens}
+                  estimatedMicroUsd={g.estimated_micro_usd}
+                  latencyMs={g.latency_ms}
+                  traceId={g.trace_id}
+                  promptVersion={g.config?.promptVersion ?? "legacy-v1"}
+                />
+              </details>
             </div>
           ))}
         </div>
@@ -78,8 +89,8 @@ export function UsagePanel({
       <p className="panel-footnote">
         Usage includes completed summaries and active reservations. Failed
         attempts release their count slot; attempted or ambiguous calls retain
-        conservative cost exposure until settled. Local extraction records zero
-        model tokens and cost.
+        conservative maximum cost exposure. Local extraction records zero model
+        tokens and cost.
       </p>
     </section>
   );

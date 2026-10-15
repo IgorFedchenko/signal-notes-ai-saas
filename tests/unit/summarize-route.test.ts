@@ -81,6 +81,8 @@ beforeEach(() => {
           period: "2026-10-01",
           reservedMicroUsd: 0,
           traceId,
+          databaseNow: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 119000).toISOString(),
         },
         error: null,
       };
@@ -89,7 +91,10 @@ beforeEach(() => {
     return { data: null, error: null };
   });
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 describe("summarization HTTP boundary", () => {
   it("returns persisted duplicate output without another provider call", async () => {
     traceId = "a".repeat(32);
@@ -99,6 +104,19 @@ describe("summarization HTTP boundary", () => {
     expect(await response.json()).toMatchObject({ cached: true });
     expect(summarize).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+  it("replays a persisted result when current live generation is disabled or the prompt changes", async () => {
+    traceId = "a".repeat(32);
+    const saved = { ...row(), config: { promptVersion: "notes-previous" } };
+    vi.stubEnv("AI_PROVIDER", "unconfigured");
+    rpc.mockResolvedValue({ data: { kind: "cached", generation: saved } });
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      cached: true,
+      promptVersion: "notes-previous",
+    });
+    expect(summarize).not.toHaveBeenCalled();
   });
   it("rejects exhausted quota and foreign ownership before the provider", async () => {
     rpc.mockResolvedValue({ data: { kind: "limit" } });
@@ -149,6 +167,33 @@ describe("summarization HTTP boundary", () => {
     expect((await POST(request())).status).toBe(409);
     expect(summarize).not.toHaveBeenCalled();
   });
+  it("makes zero calls if the positive acknowledgement arrives after its remaining DB TTL", async () => {
+    let monotonic = 100;
+    vi.spyOn(performance, "now").mockImplementation(() => monotonic);
+    const normal = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) => {
+      if (name !== "begin_generation_attempt_v2") return normal(name, args);
+      monotonic = 5000;
+      return {
+        data: {
+          kind: "attempt",
+          config: generationConfig(),
+          period: "2026-10-01",
+          reservedMicroUsd: 0,
+          traceId,
+          databaseNow: "2026-10-16T00:00:00Z",
+          expiresAt: "2026-10-16T00:00:01Z",
+        },
+        error: null,
+      };
+    });
+    expect((await POST(request())).status).toBe(409);
+    expect(summarize).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("fail_generation_v2", {
+      p_user: user,
+      p_request: requestId,
+    });
+  });
   it("passes the bound snapshot to the provider and persists usage before returning", async () => {
     vi.mocked(summarize).mockResolvedValue({
       text: "• Synthetic local test note.",
@@ -162,6 +207,7 @@ describe("summarization HTTP boundary", () => {
     expect(summarize).toHaveBeenCalledWith(
       "Synthetic local test note.",
       generationConfig(),
+      expect.any(Number),
     );
     expect(rpc).toHaveBeenCalledWith(
       "finish_generation_v2",
