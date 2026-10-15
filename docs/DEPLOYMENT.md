@@ -1,0 +1,40 @@
+# Owner-assisted hosted demo
+
+No hosted project has been provisioned by this repository. Do not enable a paid
+plan or use a live LLM key without the owner's explicit approval.
+
+1. Owner creates or grants access to a free Supabase project and an eligible Vercel
+   project. Confirm Vercel's Hobby terms permit the intended personal demo use.
+2. Deploy only a clean, published `main` matching `origin/main`, using the platform's
+   normal Git deployment. Never bypass deployment guards or publish another branch.
+3. Apply the checked-in migration once to the new, empty Supabase project with the
+   normal Supabase migration workflow. Do not run local test scripts against hosted data.
+4. In Supabase Auth, configure the exact public site URL, enable email confirmation,
+   set up SMTP, and set the confirmation template to:
+
+   ```html
+   <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup"
+     >Confirm your account</a
+   >
+   ```
+
+   Local email confirmation is deliberately disabled for isolated E2E. Do not reuse
+   the public local demo credentials in a hosted project.
+
+5. Owner places `.env.example` values in Vercel project settings, never chat or Git.
+   Use the hosted Supabase URL/publishable key, server-only service-role key and
+   transaction-pooler DSN. Use `APP_URL` with the exact canonical HTTPS origin.
+   Start with `AI_PROVIDER=fixture`, without an LLM key. No server key uses a
+   `NEXT_PUBLIC_` prefix.
+6. Owner provides Stripe test settings as described in README. Register a snapshot
+   webhook for the four supported events at `/api/stripe/webhook`; use the SDK's
+   matching API version. Enable the customer portal with only the configured price.
+7. Verify on the hosted URL: signup/confirmation/login, private note and summary,
+   test checkout, plan updated via webhook, customer portal cancellation, repeat
+   webhook and unchanged revision. Check another user's account is isolated.
+8. Record the URL and deployed SHA in `docs/VERIFICATION.md`. Keep GitHub private
+   until Igor reviews and explicitly approves publication. Never add contact
+   information to the Upwork portfolio text.
+
+For a public fixture demo, UI disclosure must stay visible. Optional real generation
+requires approval of the model key and spend, provider-side caps and abuse controls.

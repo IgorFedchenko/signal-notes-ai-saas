@@ -1,0 +1,46 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - name: Start isolated Supabase and seed synthetic data
+        run: npm run local:setup
+      - name: Real Auth, RLS, concurrency and billing transaction tests
+        run: npm run test:db
+      - run: npm run build
+      - name: Check browser bundles for server secrets
+        run: node --env-file=.env.local scripts/check-client-secrets.mjs
+      - run: npx playwright install --with-deps chromium
+      - name: Browser acceptance — desktop and mobile
+        run: npm run test:e2e
+      - name: Acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-evidence
+          path: |
+            playwright-report/
+            docs/screenshots/
+          retention-days: 7
+      - name: Stop dedicated test stack
+        if: always()
+        run: npx supabase stop --no-backup
