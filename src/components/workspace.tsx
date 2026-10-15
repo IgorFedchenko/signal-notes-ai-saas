@@ -18,7 +18,14 @@ import {
 } from "lucide-react";
 import { Brand } from "./brand";
 import type { Note, Generation, SummaryAnswer } from "./workspace/types";
-import { call, ApiError } from "./workspace/api";
+import {
+  createNote,
+  generateSummary,
+  openBilling,
+  signOut,
+  deleteNote,
+  ApiError,
+} from "./workspace/api";
 import { NoteComposer } from "./workspace/note-composer";
 import { SummaryPanel } from "./workspace/summary-panel";
 import { UsagePanel } from "./workspace/usage-panel";
@@ -83,7 +90,7 @@ export function Workspace(props: {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     await run("save", async () => {
-      const { note } = await call("/api/notes", {
+      const { note } = await createNote({
         title: form.get("title"),
         content: form.get("content"),
       });
@@ -100,7 +107,7 @@ export function Workspace(props: {
         request.current = { noteId: selected.id, key: crypto.randomUUID() };
       let result;
       try {
-        result = await call("/api/summarize", {
+        result = await generateSummary({
           noteId: selected.id,
           requestId: request.current.key,
         });
@@ -130,7 +137,7 @@ export function Workspace(props: {
   }
   async function billing(kind: "checkout" | "portal") {
     await run(kind, async () => {
-      const result = await call(`/api/billing/${kind}`, {});
+      const result = await openBilling(kind);
       window.location.assign(result.url);
     });
   }
@@ -164,7 +171,7 @@ export function Workspace(props: {
             disabled={!!busy}
             onClick={() =>
               run("logout", async () => {
-                await call("/api/auth", { action: "logout" });
+                await signOut();
                 router.replace("/login");
                 router.refresh();
               })
@@ -205,7 +212,7 @@ export function Workspace(props: {
               disabled={!!busy}
               onClick={() =>
                 run("logout", async () => {
-                  await call("/api/auth", { action: "logout" });
+                  await signOut();
                   router.replace("/login");
                   router.refresh();
                 })
@@ -402,11 +409,7 @@ export function Workspace(props: {
                               )
                             )
                               return;
-                            await call(
-                              "/api/notes",
-                              { id: selected.id },
-                              "DELETE",
-                            );
+                            await deleteNote(selected.id);
                             const remaining = notes.filter(
                               (n) => n.id !== selected.id,
                             );

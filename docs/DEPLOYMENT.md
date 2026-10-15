@@ -27,7 +27,8 @@ plan or use a live LLM key without the owner's explicit approval.
    Start with `AI_PROVIDER=fixture`, without an LLM key. No server key uses a
    `NEXT_PUBLIC_` prefix.
 6. Owner provides Stripe test settings as described in README. Register a snapshot
-   webhook for the four supported events at `/api/stripe/webhook`; use the SDK's
+   webhook for `checkout.session.completed`, `customer.subscription.created`,
+   `customer.subscription.updated`, and `customer.subscription.deleted` at `/api/stripe/webhook`; use the SDK's
    matching API version. Enable the customer portal with only the configured price.
 7. Verify on the hosted URL: signup/confirmation/login, private note and summary,
    test checkout, plan updated via webhook, customer portal cancellation, repeat

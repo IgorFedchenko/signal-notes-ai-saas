@@ -9,5 +9,5 @@ export default defineConfig({
       ),
     },
   },
-  test: { include: ["tests/unit/**/*.test.ts"], maxWorkers: 2 },
+  test: { include: ["tests/unit/**/*.test.{ts,mjs}"], maxWorkers: 2 },
 });

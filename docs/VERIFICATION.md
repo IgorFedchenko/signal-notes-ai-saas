@@ -8,9 +8,11 @@ build, browser bundle-secret check and desktop/mobile browser acceptance. This p
 preservation of those existing checks for the structured-result/attempt-fence change.
 It does not establish all adversarial races, the expanded final test matrix or live quality.
 
-New recorded evaluator, OSS scanner, launcher/shutdown and application-to-Phoenix
-smoke are implemented. Their final-revision CI evidence and independent verification
-are pending; do not reuse the earlier run as proof they executed. The offline command
+Revision `2f786aa` [CI run 38821579755](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38821579755)
+passed the verify job (including the evaluator/scanner), but its mandatory launcher/Phoenix
+job failed: real Auth/note/summarize succeeded, then export failed and four-span readback
+was absent. The cause is under diagnosis; the failure remains open until the same
+actual-route assertion passes at a corrected revision. The offline command
 currently checks 12 canonical synthetic cases, 40 facts, 11 named negative twins,
 actual local-provider kinds/evidence and persistent budget arithmetic.
 
@@ -25,8 +27,8 @@ actual local-provider kinds/evidence and persistent budget arithmetic.
 | Live LLM                      | Actual supported snapshot on frozen corpus                                     | Pending owner approval/key/budget                   |
 | Live judge                    | Actual model, frozen rubric and combined spend ledger                          | Pending owner approval/key/budget                   |
 | Stripe hosted test roundtrip  | Real hosted Checkout/Portal + real signed delivery                             | Pending owner test settings                         |
-| Phoenix                       | Actual summarize route/DB trace ID and four spans read back                    | Implemented; CI execution pending                   |
-| Whole launcher                | Clean bootstrap through HTTP/Auth/DB readiness and shutdown                    | Implemented; CI execution pending                   |
+| Phoenix                       | Actual summarize route/DB trace ID and four spans read back                    | Failed at `2f786aa`; correction pending             |
+| Whole launcher                | Clean bootstrap through HTTP/Auth/DB readiness and shutdown                    | Failed at `2f786aa`; correction pending             |
 | GIF                           | Real synthetic browser recording, no DOM substitution                          | Capture command ready; capture pending              |
 | Hosted demo                   | Real deployed URL, Auth confirmation/SMTP, TLS/pooler                          | Pending owner access/consent                        |
 | Public CodeQL/native scanning | Eligible public execution                                                      | Pending publication approval; skipped while private |

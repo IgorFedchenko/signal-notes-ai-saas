@@ -1,6 +1,11 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
+
+import {
+  assertBootstrapEnvironment,
+  localAppEnvironment,
+} from "./local-environment.mjs";
 
 const capture = process.argv.includes("--capture");
 const smoke = process.argv.includes("--smoke") || capture;
@@ -19,8 +24,8 @@ function launch(command, args, env = process.env) {
   child.once("exit", () => children.delete(child));
   return child;
 }
-async function run(command, args) {
-  const child = launch(command, args);
+async function run(command, args, env = process.env) {
+  const child = launch(command, args, env);
   const code = await new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("exit", (code) => resolve(code));
@@ -76,16 +81,10 @@ for (const signal of ["SIGINT", "SIGTERM"])
     void shutdown();
   });
 try {
+  assertBootstrapEnvironment();
   if (!existsSync("node_modules/next"))
     await run("npm", ["ci", "--no-audit", "--no-fund"]);
   if (stopping) throw new Error("stopped");
-  if (
-    existsSync(".env.local") &&
-    !readFileSync(".env.local", "utf8").includes(
-      "# GENERATED LOCAL SIGNAL NOTES",
-    )
-  )
-    throw new Error("owner_managed_environment");
   ownsStack = true;
   await run(process.execPath, ["scripts/local-setup.mjs"]);
   if (stopping) throw new Error("stopped");
@@ -101,17 +100,8 @@ try {
     ]);
   }
   if (stopping) throw new Error("stopped");
-  const app = launch("npm", ["run", "dev"], {
-    ...process.env,
-    AI_PROVIDER: "fixture",
-    AI_LIVE_APPROVED: "false",
-    ...(phoenix
-      ? {
-          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:
-            "http://127.0.0.1:56006/v1/traces",
-        }
-      : {}),
-  });
+  const env = localAppEnvironment(phoenix);
+  const app = launch("npm", ["run", "dev"], env);
   console.log(
     "Signal Notes → http://127.0.0.1:3210 · synthetic login in README · Ctrl+C stops this app and its stack.",
   );
@@ -134,17 +124,14 @@ try {
   if (!ready) throw new Error("app_readiness_timeout");
   if (capture) {
     await run("npx", ["--no-install", "playwright", "install", "chromium"]);
-    await run(process.execPath, [
-      "--env-file=.env.local",
-      "scripts/capture-demo.mjs",
-    ]);
+    await run(process.execPath, ["scripts/capture-demo.mjs"], env);
   }
   if (smoke) {
-    await run(process.execPath, [
-      "--env-file=.env.local",
-      "scripts/local-smoke.mjs",
-      ...(phoenix ? ["--phoenix"] : []),
-    ]);
+    await run(
+      process.execPath,
+      ["scripts/local-smoke.mjs", ...(phoenix ? ["--phoenix"] : [])],
+      env,
+    );
     await shutdown();
   } else
     await new Promise((resolve) => {
@@ -154,7 +141,7 @@ try {
 } catch {
   if (!stopping) {
     console.error(
-      "Local demo failed; check Docker readiness and dedicated ports. Owner-managed .env.local is never overwritten.",
+      "Local demo failed; clear inherited app settings and check Docker readiness and dedicated ports. Owner-managed .env.local is never overwritten.",
     );
     process.exitCode = 1;
   }

@@ -1,3 +1,4 @@
+import { assertDedicatedStack } from "./local-environment.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -5,11 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createClient } from "@supabase/supabase-js";
 
 const base = "http://127.0.0.1:3210";
-if (
-  process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:56321" ||
-  new URL(process.env.SUPABASE_DB_URL).port !== "56322"
-)
-  throw new Error("Local smoke requires dedicated sandbox.");
+assertDedicatedStack(process.env);
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -19,6 +16,8 @@ const email = `smoke-${randomUUID()}@signal.local`;
 let userId;
 let cookie = "";
 let noteId;
+let readbackStatus = "not_attempted";
+mkdirSync("test-results", { recursive: true });
 async function api(path, body, method = "POST") {
   const response = await fetch(`${base}${path}`, {
     method,
@@ -76,6 +75,9 @@ try {
         `http://127.0.0.1:56006/v1/projects/signal-notes/spans?trace_id=${result.traceId}&limit=20`,
         { signal: AbortSignal.timeout(2000) },
       ).catch(() => null);
+      readbackStatus = response
+        ? `http_${response.status}`
+        : "transport_unavailable";
       if (response?.ok) {
         spans = (await response.json()).data;
         if (spans.length === 4) break;
@@ -129,6 +131,12 @@ try {
       phoenixReadback: !!spans,
     }),
   );
+} catch (error) {
+  writeFileSync(
+    "test-results/launcher-smoke.json",
+    `${JSON.stringify({ pass: false, code: "launcher_smoke_failed", phoenixReadbackStatus: readbackStatus })}\n`,
+  );
+  throw error;
 } finally {
   if (userId) await admin.auth.admin.deleteUser(userId);
 }

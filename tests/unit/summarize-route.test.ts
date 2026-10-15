@@ -118,6 +118,40 @@ describe("summarization HTTP boundary", () => {
     });
     expect(summarize).not.toHaveBeenCalled();
   });
+  it("replays saved output after a valid current input-cap reduction", async () => {
+    traceId = "b".repeat(32);
+    const saved = row();
+    vi.stubEnv("AI_INPUT_BYTE_CAP", "1024");
+    rpc.mockResolvedValue({ data: { kind: "cached", generation: saved } });
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      cached: true,
+      result: saved.result,
+      traceId: saved.trace_id,
+      estimatedMicroUsd: saved.estimated_micro_usd,
+      promptVersion: saved.config.promptVersion,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "reserve_generation_v2",
+      expect.objectContaining({ p_config: null }),
+    );
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(summarize).not.toHaveBeenCalled();
+  });
+  it("rejects a new request after the same input-cap reduction without a permit/provider call", async () => {
+    vi.stubEnv("AI_INPUT_BYTE_CAP", "1024");
+    rpc.mockImplementation(async (name, args) => {
+      expect(name).toBe("reserve_generation_v2");
+      expect(args.p_config).toBeNull();
+      return { data: null, error: new Error("invalid_generation_config") };
+    });
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "provider_invalid" });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(summarize).not.toHaveBeenCalled();
+  });
   it("rejects exhausted quota and foreign ownership before the provider", async () => {
     rpc.mockResolvedValue({ data: { kind: "limit" } });
     expect((await POST(request())).status).toBe(429);

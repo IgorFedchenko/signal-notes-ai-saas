@@ -9,7 +9,6 @@ With Docker, Node, Chromium dependencies and ffmpeg available:
 npm run demo -- --capture
 ```
 
-On Studio, run that whole command through `~/.local/bin/studio-heavy-run --`.
 The launcher installs dependencies, starts the dedicated local fixture stack/app,
 records real browser interaction with `tour@signal.local`, encodes
 `demos/signal-notes.gif`, runs the HTTP/DB smoke, and shuts down. It saves the original

@@ -89,12 +89,14 @@ export async function POST(request: Request) {
     // A cached success remains readable even when live generation is disabled.
     let config: ReturnType<typeof generationConfig> | null = null;
     let configurationError: unknown;
+    let reserved = 0;
     try {
       config = generationConfig();
+      reserved = reservationCost(note.content, config);
     } catch (error) {
+      config = null; // SQL may replay success, but cannot admit a new attempt.
       configurationError = error;
     }
-    const reserved = config ? reservationCost(note.content, config) : 0;
     const admin = adminClient();
     return await traced(
       "generation",

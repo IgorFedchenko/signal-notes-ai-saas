@@ -10,6 +10,7 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { resourceFromAttributes } from "@opentelemetry/resources";
+import { exportFailureStatus } from "./export-status";
 import { safeLog } from "./log";
 
 let provider: NodeTracerProvider | undefined;
@@ -38,7 +39,10 @@ export function telemetry() {
         export: (spans, done) =>
           exporter.export(spans, (result) => {
             if (result.code !== 0)
-              safeLog("telemetry_unavailable", { code: "export_failed" });
+              safeLog("telemetry_unavailable", {
+                code: "export_failed",
+                status: exportFailureStatus(result.error),
+              });
             done({ code: 0 });
           }),
         shutdown: () => exporter.shutdown(),

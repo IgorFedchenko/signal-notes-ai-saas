@@ -1,11 +1,11 @@
+import { assertDedicatedStack } from "./local-environment.mjs";
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 
-if (process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:56321")
-  throw new Error("Capture uses the dedicated synthetic local stack only.");
+assertDedicatedStack(process.env);
 if (spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status !== 0)
   throw new Error("Install ffmpeg to encode the genuine browser recording.");
 const admin = createClient(

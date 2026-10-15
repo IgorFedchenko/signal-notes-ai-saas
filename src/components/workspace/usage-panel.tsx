@@ -49,7 +49,10 @@ export function UsagePanel({
             <div className="table-row" key={g.request_id}>
               <span>
                 <ArrowDownLeft size={15} />
-                {notes.find((n) => n.id === g.note_id)?.title ?? "Deleted note"}
+                {g.note_id === null
+                  ? "Deleted note"
+                  : (notes.find((n) => n.id === g.note_id)?.title ??
+                    "Earlier note")}
               </span>
               <span>
                 {g.provider}

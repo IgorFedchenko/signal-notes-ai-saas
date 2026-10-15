@@ -20,7 +20,7 @@ export function GenerationMetrics(
         <dt>Estimated token cost</dt>
         <dd>
           {metrics.estimatedMicroUsd === null
-            ? "Unknown (legacy)"
+            ? "Unknown"
             : dollars(metrics.estimatedMicroUsd)}
         </dd>
       </div>
@@ -36,7 +36,7 @@ export function GenerationMetrics(
       </div>
       <div className="trace">
         <dt>Trace ID</dt>
-        <dd>{metrics.traceId ?? "Unavailable (legacy)"}</dd>
+        <dd>{metrics.traceId ?? "Unavailable"}</dd>
       </div>
     </dl>
   );

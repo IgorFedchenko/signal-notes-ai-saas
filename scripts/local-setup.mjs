@@ -1,16 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { writeFileSync, existsSync, readFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
-// Use only this project's dedicated stack. Never overwrite an owner's hosted env.
-if (existsSync(".env.local")) {
-  const old = readFileSync(".env.local", "utf8");
-  if (!old.includes("# GENERATED LOCAL SIGNAL NOTES")) {
-    throw new Error(
-      "Existing .env.local is owner-managed. Use npm run dev, or move it aside to start the local demo.",
-    );
-  }
-}
+import {
+  assertBootstrapEnvironment,
+  assertDedicatedStack,
+} from "./local-environment.mjs";
+
+assertBootstrapEnvironment();
 function run(args, capture = false) {
   const result = spawnSync("npx", ["--no-install", "supabase", ...args], {
     stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
@@ -35,6 +32,12 @@ run(
 );
 run(["migration", "up", "--local"]);
 const env = JSON.parse(run(["status", "-o", "json"], true));
+assertDedicatedStack({
+  NEXT_PUBLIC_SUPABASE_URL: env.API_URL,
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: env.ANON_KEY,
+  SUPABASE_SERVICE_ROLE_KEY: env.SERVICE_ROLE_KEY,
+  SUPABASE_DB_URL: env.DB_URL,
+});
 const contents = `# GENERATED LOCAL SIGNAL NOTES — local test credentials only\nNEXT_PUBLIC_SUPABASE_URL=${env.API_URL}\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${env.ANON_KEY}\nSUPABASE_SERVICE_ROLE_KEY=${env.SERVICE_ROLE_KEY}\nSUPABASE_DB_URL=${env.DB_URL}\nAPP_URL=http://127.0.0.1:3210\nAI_PROVIDER=fixture\nSTRIPE_WEBHOOK_SECRET=whsec_local_test_fixture_only\n`;
 writeFileSync(".env.local", contents, { mode: 0o600 });
 const admin = createClient(env.API_URL, env.SERVICE_ROLE_KEY, {

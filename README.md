@@ -47,9 +47,6 @@ may take several minutes. Owner-managed `.env.local` files are never overwritten
 if Phoenix was enabled, `docker compose --profile observability down`.
 Ports: app 3210, Supabase API 56321, Postgres 56322, local mail 56324.
 
-On Studio, wrap the whole command in `~/.local/bin/studio-heavy-run --`.
-Builds, Docker operations and browser checks on that host use the same queue.
-
 ```sh
 npm run demo -- --smoke            # whole bootstrap, real HTTP/Auth/DB smoke, shutdown
 npm run demo -- --smoke --phoenix  # also read actual route spans back from Phoenix
@@ -151,7 +148,13 @@ endpoint (local `/v1/traces`). Never put auth values in URL query/userinfo.
 **Stripe test mode:** create a monthly USD 12 recurring test price, enable the customer
 portal for that price, and provide `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`,
 `STRIPE_WEBHOOK_SECRET` and `SUPABASE_DB_URL` in ignored server settings. Forward the
-four subscription/checkout events to `/api/stripe/webhook` using Stripe CLI. Sign in,
+four handled events using Stripe CLI:
+
+```sh
+stripe listen --forward-to http://127.0.0.1:3210/api/stripe/webhook --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted
+```
+
+Sign in,
 choose **Try Pro in test mode**, complete an actual hosted test checkout and verify
 its webhook before claiming payment acceptance. No such roundtrip is claimed yet.
 
