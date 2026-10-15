@@ -1,11 +1,13 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
   assertBootstrapEnvironment,
   localAppEnvironment,
 } from "./local-environment.mjs";
+
+import { phoenixReadiness } from "./phoenix-readiness.mjs";
 
 const capture = process.argv.includes("--capture");
 const smoke = process.argv.includes("--smoke") || capture;
@@ -98,6 +100,17 @@ try {
       "-d",
       "--wait",
     ]);
+  }
+  if (stopping) throw new Error("stopped");
+  if (phoenix) {
+    const readiness = await phoenixReadiness();
+    mkdirSync("test-results", { recursive: true });
+    writeFileSync(
+      "test-results/phoenix-readiness.json",
+      `${JSON.stringify(readiness)}\n`,
+    );
+    console.log(JSON.stringify({ event: "phoenix_readiness", ...readiness }));
+    if (!readiness.ready) throw new Error("phoenix_readiness_timeout");
   }
   if (stopping) throw new Error("stopped");
   const env = localAppEnvironment(phoenix);
