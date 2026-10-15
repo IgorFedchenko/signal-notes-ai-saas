@@ -1,6 +1,6 @@
 {
   "name": "signal-notes-ai-saas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -17,12 +17,18 @@
     "test:db": "node --env-file=.env.local node_modules/vitest/vitest.mjs run --config vitest.db.config.ts",
     "test:e2e": "playwright test",
     "local:setup": "node scripts/local-setup.mjs",
-    "local:stop": "supabase stop",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "local:stop": "supabase stop --no-backup",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run eval",
+    "eval": "node --conditions=react-server --import tsx evals/run.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "smoke": "npm run demo -- --smoke",
+    "smoke:phoenix": "npm run demo -- --smoke --phoenix"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
-    "@opentelemetry/exporter-trace-otlp-http": "0.223.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "0.223.0",
     "@opentelemetry/resources": "2.12.0",
     "@opentelemetry/sdk-trace-base": "2.12.0",
     "@opentelemetry/sdk-trace-node": "2.12.0",

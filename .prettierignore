@@ -1,0 +1,10 @@
+node_modules/
+.next/
+playwright-report/
+test-results/
+coverage/
+supabase/.temp/
+supabase/.branches/
+supabase/migrations/*.sql
+evals/results/
+demos/raw/

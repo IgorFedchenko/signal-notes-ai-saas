@@ -2,11 +2,11 @@
 
 **Title (59 characters):** Signal Notes: AI SaaS with Supabase Auth and Stripe Billing
 
-**Description:** A working reference implementation for a subscription SaaS that turns private notes into concise summaries. Built with Next.js App Router, Supabase Auth/Postgres and Stripe test billing, with tenant isolation, atomic plan limits and idempotent webhook handling. Automated tests cover cross-user data access, concurrent usage and the main desktop/mobile workflow.
+**Description:** A working reference implementation for a subscription SaaS that turns private notes into concise summaries. Built with Next.js App Router, Supabase Auth/Postgres and Stripe test billing, with tenant isolation, atomic count/cost limits, evidence-backed output and idempotent webhook handling. Automated tests cover cross-user data access, concurrent usage and the main desktop/mobile workflow.
 
 **Five Upwork skill tags:** Next.js · Supabase · Stripe · TypeScript · API Integration
 
-**Recent builds:** Built Signal Notes, a Next.js/Supabase AI SaaS reference with Stripe test subscriptions, secure private data and metered summaries.
+**Recent builds:** Built Signal Notes, a Next.js/Supabase AI SaaS reference with Stripe test subscriptions, secure private data and metered summaries with exact source evidence.
 
 **Project URL:** https://github.com/IgorFedchenko/signal-notes-ai-saas
 

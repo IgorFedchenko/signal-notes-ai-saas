@@ -8,7 +8,7 @@ import {
 } from "@opentelemetry/api";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { safeLog } from "./log";
 
@@ -30,7 +30,7 @@ export function telemetry() {
     // Do not enable SDK diagnostics or auto-instrument HTTP: both can leak payloads.
     const exporter = new OTLPTraceExporter({
       url: url.toString(),
-      headers: {},
+      headers: { "x-project-name": "signal-notes" },
       timeoutMillis: 1000,
     });
     processors.push(
@@ -48,6 +48,7 @@ export function telemetry() {
   provider = new NodeTracerProvider({
     resource: resourceFromAttributes({
       "service.name": "signal-notes",
+      "openinference.project.name": "signal-notes",
       "service.version": "0.2.0",
     }),
     spanProcessors: processors,

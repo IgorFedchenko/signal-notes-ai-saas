@@ -7,7 +7,7 @@ plan or use a live LLM key without the owner's explicit approval.
    project. Confirm Vercel's Hobby terms permit the intended personal demo use.
 2. Deploy only a clean, published `main` matching `origin/main`, using the platform's
    normal Git deployment. Never bypass deployment guards or publish another branch.
-3. Apply the checked-in migration once to the new, empty Supabase project with the
+3. Apply all checked-in migrations in order to the new, empty Supabase project with the
    normal Supabase migration workflow. Do not run local test scripts against hosted data.
 4. In Supabase Auth, configure the exact public site URL, enable email confirmation,
    set up SMTP, and set the confirmation template to:
@@ -38,3 +38,18 @@ plan or use a live LLM key without the owner's explicit approval.
 
 For a public fixture demo, UI disclosure must stay visible. Optional real generation
 requires approval of the model key and spend, provider-side caps and abuse controls.
+
+## Upgrading an existing reference database
+
+Stop only this app's old workers before the v2 migration; do not cut over with old
+in-flight provider jobs. Keep the original migration unchanged and apply the additive
+`202610160002_generation_contract.sql`. It labels historical costs unknown, retains
+successful count/dedup history, fails unfinished legacy reservations, and removes the
+old mutating RPC signatures even for service_role. Do not keep an old caller running
+against the new schema. Validate empty and baseline-seeded upgrades on disposable
+local databases before touching any hosted database.
+
+Note deletion purges derived text at the DB boundary, including direct RLS DELETE;
+non-content usage/cost/dedup IDs intentionally remain. Attempted/ambiguous failures
+retain conservative exposure. Review privacy retention and operator reconciliation
+before any real-data deployment; this demo uses synthetic data only.

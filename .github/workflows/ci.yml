@@ -16,12 +16,20 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm audit --audit-level=high
+      - name: Install pinned OSS secret scanner
+        run: scripts/install-gitleaks.sh
+      - name: Scan repository history for secrets
+        run: gitleaks git --redact --no-banner
+      - name: Verify scanner negative control
+        run: node scripts/check-secret-scanner.mjs
       - run: npm run check
       - name: Start isolated Supabase and seed synthetic data
         run: npm run local:setup
@@ -39,9 +47,38 @@ jobs:
         with:
           name: acceptance-evidence
           path: |
+            evals/results/
+            test-results/
             playwright-report/
             docs/screenshots/
           retention-days: 7
       - name: Stop dedicated test stack
         if: always()
         run: npx supabase stop --no-backup
+
+  launcher-and-phoenix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Whole clean-clone bootstrap, actual route, Phoenix readback and shutdown
+        run: npm run demo -- --smoke --phoenix
+      - name: Confirm app and dedicated database ports released
+        run: node scripts/check-stopped.mjs
+      - name: Launcher and Phoenix evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-phoenix-evidence
+          path: test-results/launcher-smoke.json
+          retention-days: 7
+      - name: Stop only the dedicated test stacks
+        if: always()
+        run: |
+          npx --no-install supabase stop --no-backup
+          docker compose --profile observability down
