@@ -9,6 +9,10 @@ tenant isolation, billing retries, and AI limits as unfinished work. Built with
 **Next.js App Router, TypeScript, Supabase Auth + Postgres, and Stripe test billing**.
 MIT licensed. All demo content is synthetic; no employer or client code, names, or data.
 
+![Signal Notes workspace with a saved note and persisted summary](docs/screenshots/workspace.png)
+
+[Landing page](docs/screenshots/landing.png) · [Mobile workspace](docs/screenshots/mobile.png) · [Verification record](docs/VERIFICATION.md)
+
 ## Try it locally
 
 Prerequisites: Node.js 22–26, npm, and a running Docker engine. From a fresh clone:
