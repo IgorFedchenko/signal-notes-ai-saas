@@ -100,8 +100,8 @@ const cases = [
     mutate: (source) =>
       replaceOnce(
         source,
-        "where user_id = old.user_id and source_note_id = old.id;",
-        "where user_id = old.user_id and source_note_id = old.id and false;",
+        "update public.generations set summary = null, result = null, source_deleted = true",
+        "update public.generations set source_deleted = true",
       ),
     args: [
       "run",
@@ -111,7 +111,7 @@ const cases = [
       "-t",
       "owner JWT delete purges",
     ],
-    assertion: /source_deleted[\s\S]*summary|summary[\s\S]*source_deleted/,
+    assertion: /Mira owns the launch|LEGACY_PRIVATE_TEXT/,
   },
   {
     id: "M5",
@@ -162,8 +162,14 @@ const cases = [
         `        metrics.recognizedClauses++;
         supportedQuotes++;`,
       ),
-    args: ["run", "eval"],
-    assertion: /invented-extra/,
+    args: [
+      "test",
+      "--",
+      "tests/unit/evaluation-contract.test.ts",
+      "-t",
+      "evidence-only facts",
+    ],
+    assertion: /expected.*recall.*to (?:include|contain).*contradiction/i,
   },
 ];
 
