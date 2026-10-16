@@ -44,9 +44,14 @@ npm run demo -- --smoke --phoenix
 npm run local:stop
 ```
 
-On Studio, every build, Docker operation, browser E2E and heavy suite must run through
+On Studio, every build, Docker startup/test workload, browser E2E and heavy suite must run through
 `~/.local/bin/studio-heavy-run -- <command>`; never bypass the shared queue or interrupt
-another job. Database tests must use only the dedicated loopback stack at API 56321 /
+another job. Read-only Docker info/status inspection does not start a workload and
+may run directly; the wrapper rejects those commands. Give each heavy test invocation
+its own ticket, including focused red/restore/green mutation checks; do not conceal a
+series in a script. Historical mutations need not be repeated for documentation-only
+changes when runtime source is unchanged; defer optional controls if they cannot be
+split safely. Database tests must use only the dedicated loopback stack at API 56321 /
 Postgres 56322. Check dedicated ports before startup; stop only resources this run owns.
 Detailed setup and meaningful negative controls are in [TESTING.md](docs/TESTING.md).
 

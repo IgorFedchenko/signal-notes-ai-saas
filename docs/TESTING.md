@@ -4,7 +4,9 @@ All fixtures and identities are synthetic. The default provider is local sentenc
 extraction: tests require no live model, judge, Stripe account or cloud service.
 Use Node.js 22–26, npm and Docker. On Studio, wrap each heavy check separately with
 `~/.local/bin/studio-heavy-run -- <command>` so each test run gets its own queue
-ticket; do not start a raw build, Docker operation or browser run. Docker services
+ticket; do not start a raw build, Docker startup/test workload or browser run.
+Read-only Docker info/status inspection may run directly; it starts no workload and
+the wrapper rejects those commands. Docker services
 must fit the wrapper's verified CPU/memory limits; otherwise defer or move the run.
 Check that dedicated ports 3210, 56321, 56322, 56324 and
 56006 are free before startup. Never point these scripts at hosted data.
@@ -47,16 +49,21 @@ validate the harness; they do not establish live model quality.
 
 ## Additional regression controls
 
-The following existing operational checks run only inside the same supervised queue
-and disposable local checkout:
+The seven actual source/SQL mutation checks in [verification](VERIFICATION.md) are
+historical evidence. A documentation-only update reruns local acceptance above;
+unchanged runtime source does not require repeating those optional mutations.
+
+`scripts/check-source-boundaries.mjs` invokes 14 focused test processes for the
+seven red/restore/green controls. Do not wrap that whole script as one Studio ticket.
+On Studio, split each focused red/restore/green test invocation into its own queue
+admission and restore source/deployed SQL exactly, or defer these optional controls.
+Never hide the series inside another script to bypass the queue. The complete
+mutation script is prepared for an isolated runner without this host restriction.
+
+Whole-launch checks also use a disposable checkout and supervised queue:
 
 ```sh
-# After local:setup: seven actual source/SQL breaks, exact restoration, same checks green.
-node --env-file=.env.local scripts/check-source-boundaries.mjs
-npm run check
-npm run test:db
-
-# After stopping the DB used above: real whole-launch and lifecycle checks.
+# After stopping the DB used for local acceptance above:
 npm run demo -- --smoke --phoenix
 node scripts/check-launcher-lifecycle.mjs
 node scripts/check-stopped.mjs
