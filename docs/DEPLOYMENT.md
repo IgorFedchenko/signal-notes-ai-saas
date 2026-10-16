@@ -1,7 +1,9 @@
-# Owner-assisted hosted demo
+# Optional deployment reference
 
-No hosted project has been provisioned by this repository. Do not enable a paid
-plan or use a live LLM key without the owner's explicit approval.
+No hosted project, live model or Stripe-hosted payment is connected. All three are
+outside this case's scope, with no access or credentials requested for acceptance.
+The checklist below is retained for a separately authorized future deployment.
+Do not execute it as part of local verification or enable a paid plan/model call.
 
 1. Owner creates or grants access to a free Supabase project and an eligible Vercel
    project. Confirm Vercel's Hobby terms permit the intended personal demo use.
@@ -26,7 +28,10 @@ plan or use a live LLM key without the owner's explicit approval.
    transaction-pooler DSN. Use `APP_URL` with the exact canonical HTTPS origin.
    Start with `AI_PROVIDER=fixture`, without an LLM key. No server key uses a
    `NEXT_PUBLIC_` prefix.
-6. Owner provides Stripe test settings as described in README. Register a snapshot
+6. For the optional Stripe integration, configure a monthly USD 12 recurring test
+   price and enable its customer portal. Server-only settings are `STRIPE_SECRET_KEY`,
+   `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` and `SUPABASE_DB_URL`.
+   Register a snapshot
    webhook for `checkout.session.completed`, `customer.subscription.created`,
    `customer.subscription.updated`, and `customer.subscription.deleted` at `/api/stripe/webhook`; use the SDK's
    matching API version. Enable the customer portal with only the configured price.
@@ -34,8 +39,7 @@ plan or use a live LLM key without the owner's explicit approval.
    test checkout, plan updated via webhook, customer portal cancellation, repeat
    webhook and unchanged revision. Check another user's account is isolated.
 8. Record the URL and deployed SHA in `docs/VERIFICATION.md`. Keep GitHub private
-   until Igor reviews and explicitly approves publication. Never add contact
-   information to the Upwork portfolio text.
+   until the common portfolio review and explicit publication approval.
 
 For a public fixture demo, UI disclosure must stay visible. Optional real generation
 requires approval of the model key and spend, provider-side caps and abuse controls.

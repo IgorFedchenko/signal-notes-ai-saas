@@ -14,7 +14,8 @@ separately from model quality. Desktop/mobile browser flows, clean one-command
 bootstrap/shutdown, actual local Phoenix readback, dependency/security/format gates,
 concise docs and genuine demo media complete the local reference evidence.
 
-Actual live model/judge, Stripe-hosted test payment, hosted deployment and public
-security features require their own owner-controlled prerequisites. They remain
-pending until run. See [current verification](VERIFICATION.md) for exact evidence;
-no fixture or mock may be promoted to a live/hosted claim.
+Live model/judge, Stripe-hosted test payment and hosted deployment are removed from
+this case's scope. Their optional adapters remain unconnected; no fixture or mock
+may be promoted to a live/hosted claim. Public-only security features are outside
+local acceptance while this repository stays private for common portfolio review.
+See [verification](VERIFICATION.md) and [local testing](TESTING.md) for evidence.

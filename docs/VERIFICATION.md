@@ -2,8 +2,9 @@
 
 All checks use synthetic data. The default app runs local sentence extraction;
 manual oracle outputs and provider doubles establish contracts, not live LLM quality.
-See [current Actions](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml)
-for the exact revision and required job status.
+Actions are disabled while private; all prepared CI/CodeQL jobs are also public-only
+before runner allocation. Use the [local acceptance commands](TESTING.md) for current
+verification. Links below preserve genuine historical runs, not a current CI promise.
 
 Local/offline verification passed at
 [`9195e721`](https://github.com/IgorFedchenko/signal-notes-ai-saas/tree/9195e7219e5cd8fe4b66d6eaf9340e969b416f47)
@@ -12,8 +13,12 @@ on 2026-10-16. Both required jobs passed in
 **132 light tests, 36 real database tests, eight desktop/mobile browser tests**, and
 the **12-case / 40-fact evaluator with 11 named negative controls**. The full checks
 ran after all seven deliberate source mutations were detected and restored. The
-separate clean-launch/Phoenix job also passed. These results cover the local reference;
-external model, judge, hosted payment, hosting and publication gates remain pending.
+separate clean-launch/Phoenix job also passed. The same full workflow subsequently
+passed on main at
+[`c9c50f2`](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38832349784).
+These results cover the local reference. Live model/judge, Stripe-hosted payment and
+cloud deployment are **removed from this case's scope**, not pending acceptance gates
+and not passed by mocks. Visibility stays private until the common portfolio review.
 
 | Lane                      | Executed boundary                                                                                                                                                                        | Limit                                                                                                               |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -26,7 +31,7 @@ external model, judge, hosted payment, hosting and publication gates remain pend
 | Billing                   | Raw Stripe SDK signatures and signed handler, duplicates/out-of-order/rollback, real DB customer locks and concurrent checkout reuse                                                     | Stripe API doubled; no hosted Checkout/Portal payment                                                               |
 | Phoenix/privacy           | Actual route=response/DB/Phoenix trace ID; root plus reserve/provider/persist children with parents/statuses; stopped collector still permits saved summary, recovery exports next trace | Pinned local Phoenix20.22.0; synthetic logs/SDK/span canaries; no tracing cloud                                     |
 | Launcher                  | Whole command from clean checkout, startup/ready SIGINT, documented restart, ports/owned resources and owner-file preservation                                                           | Dedicated ephemeral local stack; setup-error subprocess boundary additionally doubled                               |
-| Repository gates          | Format/lint/types, dependency audit, OSS Gitleaks with negative twin, actual bad/corrected git-hook commits and client bundle/source-map canaries                                        | CodeQL analysis skipped while private; native public scanning pending                                               |
+| Repository gates          | Format/lint/types, dependency audit, OSS Gitleaks with negative twin, actual bad/corrected git-hook commits and client bundle/source-map canaries                                        | CodeQL/native public scanning are outside local acceptance while private                                            |
 | Media                     | Genuine 16-second GIF, current workspace/mobile, exact hashes/revisions                                                                                                                  | Synthetic identity, local extraction, unavailable billing; see [provenance](../demos/README.md)                     |
 
 ## Mutation checks
@@ -66,12 +71,11 @@ provenance; the landing image comes from `34c694d`. Exact media hashes and sourc
 remain in
 [media.json](../demos/media.json).
 
-Live candidate evaluation and LLM-as-judge require explicit owner approval, a supported
-dated snapshot, provisioned key and one combined persistent spending cap. Actual
-Stripe-hosted test payment, hosted Auth/deployment and public visibility/scanning also
-remain pending owner prerequisites. No fixture, skipped job, redirect or local Docker
-result passes those gates. The result is a local reference, not full AI/hosted SaaS
-acceptance or a promise of semantic correctness or universal injection protection.
+The optional model/judge and Stripe adapters remain unconnected. Their offline
+contracts are tested, but no actual model verdict or Stripe-hosted payment is claimed.
+Cloud deployment is also outside scope. No credentials or external connections are
+needed to accept this local reference. It makes no promise of general semantic
+correctness or universal injection protection.
 
 Reproduce with README commands and inspect the run artifacts: evaluator results,
 DB ledgers/migration receipts, browser traces/screenshots, hook controls, real Phoenix

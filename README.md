@@ -1,18 +1,18 @@
 # Signal Notes
 
-[![CI](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml/badge.svg)](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml)
+[![Checks: local verification](https://img.shields.io/badge/checks-local_verification-315b4c)](docs/TESTING.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Stack: Next.js · Supabase · Stripe](https://img.shields.io/badge/stack-Next.js_·_Supabase_·_Stripe-315b4c)
 
 **Private notes → evidence-backed takeaways, with authentication, subscriptions and bounded AI usage.**
 
 A small SaaS reference for clients shipping a Next.js product with Supabase Auth/RLS,
-Stripe test billing, durable request keys, and understandable AI limits. All inputs
+Stripe test-mode integration code, durable request keys, and understandable AI limits. All inputs
 are synthetic. MIT licensed; no employer/client code or data.
 
 ![Real local app: sign in, save a note, inspect evidence and usage, then open test billing](demos/signal-notes.gif)
 
-[Mobile](docs/screenshots/mobile.png) · [Verification](docs/VERIFICATION.md) ·
+[Architecture](docs/ARCHITECTURE.md) · [Testing](docs/TESTING.md) · [Verification](docs/VERIFICATION.md) ·
 [Workspace](docs/screenshots/workspace.png) · [Recording provenance](demos/README.md).
 
 ## Two-minute tour
@@ -26,8 +26,9 @@ are synthetic. MIT licensed; no employer/client code or data.
 
 The default **local extractive provider** selects source sentences and abstains on
 empty-of-facts/instruction-only inputs. It makes no model calls and costs $0. It is
-not evidence of live LLM quality. Live model/judge, actual Stripe-hosted test payment,
-hosted deployment and public visibility remain [separate pending gates](docs/VERIFICATION.md).
+not evidence of live LLM quality. Live model/judge calls, Stripe-hosted payment and
+cloud deployment are **outside this case's scope**. No external credentials or
+services are needed for the local reference. See [evidence boundaries](docs/VERIFICATION.md).
 
 ## Run from a clean clone
 
@@ -57,21 +58,21 @@ npm run demo -- --capture          # real UI → GIF; needs ffmpeg + Chromium sy
 
 ```mermaid
 flowchart LR
-    Browser --> Next[Next.js routes]
-    Next --> Auth[Supabase Auth]
+    Browser --> Next["Next.js routes"]
+    Next --> Auth["Supabase Auth"]
     Next -->|user JWT + RLS| DB[(Postgres)]
-    Next --> Reserve[Atomic count + cost reservation]
+    Next --> Reserve["Atomic count + cost reservation"]
     Reserve --> DB
-    Reserve --> Permit[Acknowledged unexpired attempt CAS]
-    Permit --> Model[Local extraction / approved model]
-    Model --> Validate[Strict JSON + original evidence]
-    Validate --> Persist[Result + usage settlement]
+    Reserve --> Permit["Acknowledged unexpired attempt CAS"]
+    Permit --> Model["Local extraction (default)"]
+    Model --> Validate["Strict JSON + original evidence"]
+    Validate --> Persist["Result + usage settlement"]
     Persist --> DB
-    Next -. safe spans .-> Phoenix[Optional local Phoenix]
-    Next --> Checkout[Stripe test Checkout / Portal]
-    Stripe[Signed webhook] --> Lock[Customer transaction lock]
-    Lock --> Current[Read canonical Stripe state]
-    Current --> Commit[Entitlement + unique event receipt]
+    Next -. safe spans .-> Phoenix["Optional local Phoenix"]
+    Next -. integration code .-> Checkout["Stripe test Checkout / Portal (not connected)"]
+    Stripe["Signed webhook (test fixture)"] --> Lock["Customer transaction lock"]
+    Lock --> Current["Read canonical Stripe state"]
+    Current --> Commit["Entitlement + unique event receipt"]
     Commit --> DB
 ```
 
@@ -108,7 +109,7 @@ No vector DB, worker queue, retrieval, agents or model tools.
   no note, prompt, response/evidence, email, cookie, key or arbitrary Error serialization.
   Export off by default; exporter outage does not fail a summary.
 
-See four short [architecture decisions](docs/adr/001-postgres-boundaries.md) and
+See the [architecture map and four decisions](docs/ARCHITECTURE.md) and
 [deployment/cutover notes](docs/DEPLOYMENT.md). Exactly-once external model execution
 is not promised. Conservative unknown exposure may require operator reconciliation.
 
@@ -132,11 +133,13 @@ harness: schema/exact evidence and fact-source support 100%, precision 1.0, macr
 named gates. Actual local-provider kind/evidence checks are reported separately.
 This is contract/evaluator evidence, not live model quality or a live judge verdict.
 
-GitHub CI runs these checks plus actual DB/browser tests, dependency audit, pinned OSS
-Gitleaks scan/negative twin, whole-launch shutdown and optional Phoenix readback.
-Dependabot covers npm/Actions weekly. CodeQL analysis is public-only and is skipped
-while private; native public secret scanning awaits publication approval. No paid
-security upgrade or model key is used in CI.
+The prepared GitHub workflow covers these checks plus actual DB/browser tests,
+dependency audit, pinned OSS Gitleaks scan/negative twin, whole-launch shutdown and
+optional Phoenix readback. **Actions are disabled while this repository is private**;
+every CI/CodeQL job is also guarded before runner allocation. Verification runs locally,
+with no private Actions minutes or paid calls. Dependabot is configured weekly for
+npm/Actions. CodeQL and native public scanning are future public-repository features,
+not required local acceptance checks.
 
 [Verified at `9195e721`](docs/VERIFICATION.md): 132 light tests, 36 real DB tests,
 eight desktop/mobile browser tests, and seven deliberate source/SQL mutations caught
@@ -151,33 +154,20 @@ loopback `http://127.0.0.1:56006`, ephemeral storage and no cloud account. For a
 owner-managed app, set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to the controlled OTLP HTTP
 endpoint (local `/v1/traces`). Never put auth values in URL query/userinfo.
 
-**Stripe test mode:** create a monthly USD 12 recurring test price, enable the customer
-portal for that price, and provide `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`,
-`STRIPE_WEBHOOK_SECRET` and `SUPABASE_DB_URL` in ignored server settings. Forward the
-four handled events using Stripe CLI:
-
-```sh
-stripe listen --forward-to http://127.0.0.1:3210/api/stripe/webhook --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted
-```
-
-Sign in,
-choose **Try Pro in test mode**, complete an actual hosted test checkout and verify
-its webhook before claiming payment acceptance. No such roundtrip is claimed yet.
-
-**Live model/judge:** owner consent, a provisioned key, current supported snapshot/rates
-and one approved persistent candidate+judge budget ≤$1 are prerequisites. See
-[the fail-closed live runner contract](evals/README.md). Key presence is not consent.
-App-live generation additionally requires explicit spend allocation and
-`AI_PROVIDER=openai`, approved server config and `AI_LIVE_APPROVED=true`.
-The checked-in snapshot is a dated reference to reverify, not permission to use it.
+**Stripe and model adapters:** retained as optional integration code. Billing tests use
+signed synthetic events, a doubled Stripe API and real local database transactions.
+The evaluator uses clearly labeled manual responses and offline judge scores.
+No Stripe-hosted checkout, live generation or live judge verdict is claimed or required.
+Keep `AI_PROVIDER=fixture`; optional adapter configuration is documented separately in
+[deployment notes](docs/DEPLOYMENT.md) and the [evaluation contract](evals/README.md).
 
 ## Scope
 
 A reference implementation, not an operated hosted service. Latest 100 notes and 200
 history rows are displayed; monthly totals query the full ledger separately. Quotas
 reset on UTC calendar months, independent of invoice dates. Hosted Auth/SMTP, public
-signup abuse controls and free-host eligibility require owner-assisted deployment.
+signup abuse controls and hosting eligibility would need a separate deployment review.
 No uploads, organization sharing, real personal data, paid infrastructure or Stripe
-live payments. Repository visibility stays private until owner review.
+live payments. Repository visibility stays private until the common portfolio review.
 
-Built by Igor Fedchenko · [Portfolio copy](docs/PORTFOLIO.md) · [Changelog](CHANGELOG.md)
+Built by Igor Fedchenko · [Mobile screenshot](docs/screenshots/mobile.png) · [Changelog](CHANGELOG.md)

@@ -8,7 +8,8 @@ real Next.js/Supabase/Postgres app at `602b4d0`, in the successful
 The separate browser job in that run stopped at JSON-module discovery; no browser
 acceptance is inferred from that failure. The earlier complete browser acceptance
 passed at [`34c694d`](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38826691940).
-Current required results are available in [Actions](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml).
+Later complete historical results are described in [verification](../docs/VERIFICATION.md).
+Actions are now disabled while private; reproduce checks [locally](../docs/TESTING.md).
 
 The recording signs in as `tour@signal.local`, saves a synthetic release decision,
 generates a local extractive summary, expands exact evidence, shows cost/prompt/trace
@@ -29,5 +30,5 @@ The launcher installs locked app dependencies, starts the dedicated local fixtur
 stack/app, captures genuine browser interaction, encodes `demos/signal-notes.gif`,
 runs the real HTTP/DB smoke and shuts down. Original WebM remains in ignored
 `demos/raw/` and the CI artifact. Use `--capture --phoenix` to also check actual route
-spans, collector outage and recovery. A real Stripe-hosted test payment requires
-separate owner-provided settings and its own recording.
+spans, collector outage and recovery. Stripe-hosted payment, live models and cloud
+deployment are outside this case's scope; no payment recording is claimed.

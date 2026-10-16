@@ -6,7 +6,8 @@ npm run eval
 
 This offline command runs the actual shared schema/evidence parser, frozen evaluator,
 negative controls, judge parser and persistent budget arithmetic. It makes no model
-calls. Results are written to ignored `evals/results/offline.json`; CI uploads them.
+calls. Results are written to ignored `evals/results/offline.json`; the prepared
+public-only CI uploads them when enabled. Private verification runs locally.
 
 `dataset.json` freezes 12 project-authored synthetic notes: six normal, four mixed
 fact/instruction attacks, and two insufficient-content inputs. Each factual case has
@@ -31,7 +32,11 @@ needs factuality ≥3; coverage/clarity means over ten factual cases need ≥3; 
 Missing, duplicated, malformed, refused or truncated replies fail; no automatic retry.
 Offline labeled scores validate this parser, not a live judge verdict.
 
-## Live lane — pending explicit owner approval
+## Optional live runner contract — outside current scope
+
+Live candidate/judge execution is removed from this case's scope. The retained
+runner is unconnected and is not an acceptance gate. The contract below applies
+only to a separately authorized future run; do not request a key for this case.
 
 A key or `--live` flag alone grants no permission. The owner first approves supported
 snapshots, dated rates, frozen input/output limits, rounds, and a total ≤1,000,000
