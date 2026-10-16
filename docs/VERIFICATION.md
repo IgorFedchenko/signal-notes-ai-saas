@@ -5,14 +5,15 @@ manual oracle outputs and provider doubles establish contracts, not live LLM qua
 See [current Actions](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml)
 for the exact revision and required job status.
 
-The complete checkpoint at [`34c694d`](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38826691940)
-passed both required jobs, including real desktop/mobile app acceptance, whole clean
-bootstrap, actual Phoenix readback, collector outage/recovery and launcher lifecycle.
-The expanded contract/migration checks at [`602b4d0`](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38827575492)
-passed 131 light tests, 36 real database checks, production build and genuine media
-capture. Its browser job stopped before execution because Node required an explicit
-JSON import attribute; the corrected discovery lists all eight tests. That failed
-job is not browser acceptance. Final independent verification remains a separate gate.
+Local/offline verification passed at
+[`9195e721`](https://github.com/IgorFedchenko/signal-notes-ai-saas/tree/9195e7219e5cd8fe4b66d6eaf9340e969b416f47)
+on 2026-10-16. Both required jobs passed in
+[run 38830344251](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38830344251):
+**132 light tests, 36 real database tests, eight desktop/mobile browser tests**, and
+the **12-case / 40-fact evaluator with 11 named negative controls**. The full checks
+ran after all seven deliberate source mutations were detected and restored. The
+separate clean-launch/Phoenix job also passed. These results cover the local reference;
+external model, judge, hosted payment, hosting and publication gates remain pending.
 
 | Lane                      | Executed boundary                                                                                                                                                                        | Limit                                                                                                               |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -28,11 +29,42 @@ job is not browser acceptance. Final independent verification remains a separate
 | Repository gates          | Format/lint/types, dependency audit, OSS Gitleaks with negative twin, actual bad/corrected git-hook commits and client bundle/source-map canaries                                        | CodeQL analysis skipped while private; native public scanning pending                                               |
 | Media                     | Genuine 16-second GIF, current workspace/mobile, exact hashes/revisions                                                                                                                  | Synthetic identity, local extraction, unavailable billing; see [provenance](../demos/README.md)                     |
 
+## Mutation checks
+
+Seven deliberate changes to actual source were exercised at `9195e721`. Four changed
+SQL functions were deployed to the dedicated test database before the focused check.
+Each change produced its intended assertion failure (**exit 1**), followed by exact
+source restoration and the **same command passing, exit 0**. All four deployed SQL
+function definitions also matched their original hashes after restoration.
+
+| Boundary                 | Deliberate break                                                 | Observed failure                                                 |
+| ------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Original evidence        | Removed exact-source quote rejection                             | Six non-original quotes no longer threw the required error       |
+| Attempt fence            | Removed the SQL not-attempted predicate                          | Four positive acknowledgements instead of one                    |
+| Unknown cost exposure    | Released exposure after an attempted failure                     | Ledger exposure was 17 instead of 100000 micro-USD               |
+| Deletion privacy         | Removed SQL summary/result clearing, preserving the deleted flag | Legacy summary text remained after direct owner-JWT deletion     |
+| Free quota               | Raised the SQL maximum from five to six                          | Six concurrent requests were admitted instead of five            |
+| Telemetry privacy        | Recorded a poisoned Error through the real SDK                   | A synthetic canary appeared in captured SDK spans                |
+| Evaluator contradictions | Treated unknown/contradictory clauses as supported               | A changed-owner response lost its required contradiction failure |
+
+The [acceptance artifact](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38830344251/artifacts/12016508901)
+contains the seven diffs, red/green logs and hash receipts under
+`test-results/source-boundaries`. After restoration, the same job passed the complete
+format/lint/type/unit/evaluator/database/build/bundle/browser suite. No test expectation,
+corpus or threshold was weakened, and no mutant remains in the committed source.
+These focused checks demonstrate detection of these seven broken boundaries; they do
+not establish general semantic correctness or universal injection protection.
+
 The actual collector outage completed the summary with HTTP200 and saved DB output
 in about one second, then a subsequent trace returned all four spans after recovery.
 App/exporter stdout and returned spans passed source/auth canary checks. Earlier
 receiver startup failures were corrected by waiting for its database-backed `/readyz`
 endpoint; a running container alone did not establish receiver readiness.
+
+The committed GIF, workspace and mobile images retain their actual `602b4d0` capture
+provenance; the landing image comes from `34c694d`. Exact media hashes and source runs
+remain in
+[media.json](../demos/media.json).
 
 Live candidate evaluation and LLM-as-judge require explicit owner approval, a supported
 dated snapshot, provisioned key and one combined persistent spending cap. Actual

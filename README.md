@@ -138,6 +138,12 @@ Dependabot covers npm/Actions weekly. CodeQL analysis is public-only and is skip
 while private; native public secret scanning awaits publication approval. No paid
 security upgrade or model key is used in CI.
 
+[Verified at `9195e721`](docs/VERIFICATION.md): 132 light tests, 36 real DB tests,
+eight desktop/mobile browser tests, and seven deliberate source/SQL mutations caught
+by their focused checks. Exact source and deployed SQL restoration preceded the
+passing full suite. Manual responses and judge-score fixtures do not establish live
+model quality.
+
 ## Optional services
 
 **Phoenix:** `npm run demo -- --smoke --phoenix` uses pinned image 20.22.0 plus digest,
