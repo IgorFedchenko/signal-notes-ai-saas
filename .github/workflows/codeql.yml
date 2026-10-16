@@ -7,6 +7,7 @@ permissions:
   contents: read
 jobs:
   eligibility:
+    if: github.event.repository.private == false
     runs-on: ubuntu-latest
     steps:
       - run: echo "CodeQL analysis runs only after owner-approved public visibility; private paid licensing is not enabled."
