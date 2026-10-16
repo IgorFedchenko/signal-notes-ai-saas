@@ -8,11 +8,31 @@ import { localAppEnvironment } from "./local-environment.mjs";
 const evidence = [];
 const initialSmoke = readFileSync("test-results/launcher-smoke.json", "utf8");
 writeFileSync("test-results/launcher-phoenix-smoke.json", initialSmoke);
+function inventory() {
+  const result = spawnSync(
+    "docker",
+    [
+      "ps",
+      "--filter",
+      "name=signal-notes",
+      "--format",
+      "{{.ID}}|{{.Names}}|{{.Status}}",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, "Dedicated container inventory available");
+  return result.stdout.trim().split("\n").filter(Boolean);
+}
 function closed() {
   const r = spawnSync(process.execPath, ["scripts/check-stopped.mjs"], {
     encoding: "utf8",
   });
   assert.equal(r.status, 0, "Owned ports must close");
+  assert.deepEqual(
+    inventory(),
+    [],
+    "No running dedicated containers after shutdown",
+  );
 }
 async function launchAndInterrupt(phase) {
   const child = spawn(process.execPath, ["scripts/demo.mjs"], {
@@ -85,6 +105,9 @@ async function launchAndInterrupt(phase) {
       exit: result.code,
       portsClosed: true,
       realSmoke: phase === "ready",
+      launcherPid: child.pid,
+      launcherExitObserved: exited,
+      runningDedicatedContainersAfter: inventory(),
     });
   } finally {
     clearTimeout(timeout);
@@ -140,6 +163,7 @@ writeFileSync(
     2,
   ),
 );
+writeFileSync("test-results/launcher-smoke.json", initialSmoke);
 console.log(
   JSON.stringify({
     event: "launcher_lifecycle_passed",

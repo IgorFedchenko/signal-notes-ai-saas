@@ -257,6 +257,78 @@ describe("summarization HTTP boundary", () => {
       expect.anything(),
     );
   });
+  it("T06 uses the immutable acknowledged snapshot even if environment changes after reservation", async () => {
+    const snapshot = generationConfig(),
+      saved = row();
+    const original = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) => {
+      if (name === "reserve_generation_v2") {
+        const reply = await original(name, args);
+        vi.stubEnv("AI_PROVIDER", "disabled-after-reservation");
+        vi.stubEnv("AI_OUTPUT_TOKEN_CAP", "1");
+        return reply;
+      }
+      if (name === "begin_generation_attempt_v2")
+        return {
+          data: {
+            kind: "attempt",
+            config: snapshot,
+            period: "2026-10-01",
+            reservedMicroUsd: 0,
+            traceId,
+            databaseNow: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 119000).toISOString(),
+          },
+          error: null,
+        };
+      if (name === "finish_generation_v2")
+        return {
+          data: {
+            kind: "succeeded",
+            generation: { ...saved, trace_id: traceId },
+          },
+          error: null,
+        };
+      return original(name, args);
+    });
+    vi.mocked(summarize).mockResolvedValue({
+      text: saved.summary,
+      result,
+      provider: snapshot.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: 1,
+    });
+    expect((await POST(request())).status).toBe(200);
+    expect(summarize).toHaveBeenCalledWith(
+      "Synthetic local test note.",
+      snapshot,
+      expect.any(Number),
+    );
+  });
+  it.each([
+    { noteId: "invalid", requestId },
+    { noteId: note, requestId: "invalid" },
+    { noteId: note, requestId, model: "forged" },
+    { noteId: note, requestId, outputCap: 2001 },
+  ])(
+    "T01 denies malformed identifiers and overrides before reservation %#",
+    async (body) => {
+      const response = await POST(
+        new Request("http://127.0.0.1:3210/api/summarize", {
+          method: "POST",
+          headers: {
+            Origin: "http://127.0.0.1:3210",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+      expect(response.status).toBe(400);
+      expect(rpc).not.toHaveBeenCalled();
+      expect(summarize).not.toHaveBeenCalled();
+    },
+  );
   it("rejects cross-origin calls before credentials", async () => {
     expect((await POST(request("https://untrusted.example"))).status).toBe(403);
     expect(identity).not.toHaveBeenCalled();

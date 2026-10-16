@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { mkdirSync } from "node:fs";
+import dataset from "../../evals/dataset.json";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 if (supabaseUrl !== "http://127.0.0.1:56321")
@@ -69,9 +70,7 @@ test("signup → private note → summary → history → quota limit → delete
   await page.getByLabel("Note title").fill("Product launch · team notes");
   await page
     .getByLabel("Your note", { exact: true })
-    .fill(
-      "The team will launch the new workspace on November 12. Maya owns onboarding and will prepare a welcome guide by Friday. Theo will run the accessibility review before the release. The main risk is confusing billing limits, so the team agreed to show remaining summaries beside the action button. The next review is on Monday.",
-    );
+    .fill(dataset.cases.find((c) => c.id === "N01")!.note);
   await page.getByRole("button", { name: "Save note", exact: true }).click();
   await expect(
     page.getByRole("heading", {
@@ -83,7 +82,7 @@ test("signup → private note → summary → history → quota limit → delete
     .getByRole("button", { name: "Summarize note", exact: true })
     .click();
   await expect(page.locator(".summary-text")).toContainText(
-    "• The team will launch",
+    "• The team approved the launch",
   );
   await expect(page.getByTestId("usage-count")).toContainText("01");
   // Assert persistence independently of the browser state.
@@ -95,7 +94,7 @@ test("signup → private note → summary → history → quota limit → delete
   expect(persisted.data![0].status).toBe("succeeded");
   await page.reload();
   await expect(page.locator(".summary-text")).toContainText(
-    "Maya owns onboarding",
+    "Mira owns the launch",
   );
   await expect(page.locator(".demo-banner")).toBeVisible();
   await expect(page.locator(".demo-banner")).toContainText("Local demo");

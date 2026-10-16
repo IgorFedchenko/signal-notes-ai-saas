@@ -1,6 +1,6 @@
 import { assertDedicatedStack } from "./local-environment.mjs";
 import assert from "node:assert/strict";
-import { chromium } from "@playwright/test";
+import { chromium, devices } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -28,6 +28,21 @@ assert.ok(created.data.user);
 const userId = created.data.user.id;
 mkdirSync("demos/raw", { recursive: true });
 const browser = await chromium.launch();
+// Compile the development route using a real synthetic login before recording.
+// The recorded context still signs in normally; no responses or identities change.
+const warm = await browser.newContext();
+try {
+  const login = await warm.request.post("http://127.0.0.1:3210/api/auth", {
+    headers: { Origin: "http://127.0.0.1:3210" },
+    data: { action: "login", email, password },
+  });
+  assert.equal(login.status(), 200);
+  const warmPage = await warm.newPage();
+  await warmPage.goto("http://127.0.0.1:3210/workspace");
+  await warmPage.getByLabel("Note title").waitFor();
+} finally {
+  await warm.close();
+}
 const context = await browser.newContext({
   viewport: { width: 1280, height: 1000 },
   recordVideo: { dir: "demos/raw", size: { width: 1280, height: 1000 } },
@@ -52,11 +67,37 @@ try {
     .click();
   await page.locator(".summary-text").waitFor();
   await page.getByText("Evidence", { exact: true }).first().click();
+  await page.locator(".summary-panel").scrollIntoViewIfNeeded();
   await page.waitForTimeout(1800);
   await page.screenshot({
     path: "docs/screenshots/workspace.png",
     fullPage: true,
   });
+  const mobile = await browser.newContext({
+    ...devices["iPhone 13"],
+    storageState: await context.storageState(),
+  });
+  try {
+    const phone = await mobile.newPage();
+    await phone.goto("http://127.0.0.1:3210/workspace");
+    await phone.locator(".summary-text").waitFor();
+    for (const disclosure of await phone
+      .locator(".takeaway details summary")
+      .all())
+      await disclosure.click();
+    assert.equal(
+      await phone.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+      true,
+    );
+    await phone.screenshot({
+      path: "docs/screenshots/mobile.png",
+      fullPage: true,
+    });
+  } finally {
+    await mobile.close();
+  }
   await page.getByRole("button", { name: "Usage & activity" }).click();
   await page.waitForTimeout(1400);
   await page.getByRole("button", { name: "Plan & billing" }).click();

@@ -510,11 +510,13 @@ describe("T15 direct JWT deletion and two-connection late finalizers", () => {
     await reserve(f, id, 50000);
     await begin(f, id);
     const held = await sql.reserve();
+    let committed = false;
     try {
       await held`begin`;
       await held`delete from notes where id=${f.note}`;
       const finishing = finish(f, id, 10, 2);
       await held`commit`;
+      committed = true;
       expect((await finishing).kind).toBe("deleted");
       expect(await row(f, id)).toMatchObject({
         result: null,
@@ -523,7 +525,7 @@ describe("T15 direct JWT deletion and two-connection late finalizers", () => {
         exposure_micro_usd: "50000",
       });
     } finally {
-      await held`rollback`;
+      if (!committed) await held`rollback`;
       held.release();
     }
   });
@@ -533,6 +535,7 @@ describe("T15 direct JWT deletion and two-connection late finalizers", () => {
     await reserve(f, id);
     await begin(f, id);
     const held = await sql.reserve();
+    let committed = false;
     try {
       await held`begin`;
       const [r] =
@@ -545,6 +548,7 @@ describe("T15 direct JWT deletion and two-connection late finalizers", () => {
         .select()
         .then((r) => r);
       await held`commit`;
+      committed = true;
       expect((await deleting).data).toHaveLength(1);
       expect(await row(f, id)).toMatchObject({
         result: null,
@@ -553,7 +557,7 @@ describe("T15 direct JWT deletion and two-connection late finalizers", () => {
         cost_status: "settled",
       });
     } finally {
-      await held`rollback`;
+      if (!committed) await held`rollback`;
       held.release();
     }
   });
@@ -640,3 +644,140 @@ it("T12 actual 25-second local HTTP provider timeout retains nonzero exposure an
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 }, 45000);
+
+it("T11 pre-commit begin rejection is distinct from lost committed acknowledgement and releases exposure", async () => {
+  const f = await fixture(),
+    id = randomUUID();
+  vi.stubEnv("APP_URL", "http://127.0.0.1:3210");
+  vi.stubEnv("AI_PROVIDER", "fixture");
+  vi.mocked(identity).mockResolvedValue({
+    db: f.client,
+    user: { id: f.id },
+  } as Awaited<ReturnType<typeof identity>>);
+  vi.mocked(adminClient).mockReturnValue({
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name === "reserve_generation_v2")
+        return admin.rpc(name, {
+          ...args,
+          p_config: paidConfig(),
+          p_reserved: 50000,
+        });
+      if (name === "begin_generation_attempt_v2")
+        return {
+          data: null,
+          error: new Error("synthetic transaction rejected before commit"),
+        };
+      return admin.rpc(name, args);
+    },
+  } as unknown as ReturnType<typeof adminClient>);
+  const response = await POST(
+    new Request("http://127.0.0.1:3210/api/summarize", {
+      method: "POST",
+      headers: {
+        Origin: "http://127.0.0.1:3210",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ noteId: f.note, requestId: id }),
+    }),
+  );
+  expect(response.status).toBe(503);
+  expect(summarize).not.toHaveBeenCalled();
+  expect(await row(f, id)).toMatchObject({
+    status: "failed",
+    attempt_started: null,
+    cost_status: "released",
+    exposure_micro_usd: "0",
+  });
+  expect(await ledger(f)).toMatchObject({ c: 0, e: 0 });
+  await receipt("begin-rejected-before-commit", f);
+});
+it("T15 actual handler cannot return provider text after direct ownerJWT deletion while provider is blocked", async () => {
+  const f = await fixture(),
+    id = randomUUID();
+  vi.stubEnv("APP_URL", "http://127.0.0.1:3210");
+  vi.stubEnv("AI_PROVIDER", "fixture");
+  vi.mocked(identity).mockResolvedValue({
+    db: f.client,
+    user: { id: f.id },
+  } as Awaited<ReturnType<typeof identity>>);
+  vi.mocked(adminClient).mockReturnValue(admin);
+  let entered!: () => void, release!: () => void;
+  const entry = new Promise<void>((r) => (entered = r)),
+    barrier = new Promise<void>((r) => (release = r));
+  vi.mocked(summarize).mockImplementation(async () => {
+    entered();
+    await barrier;
+    return {
+      result: {
+        kind: "summary",
+        takeaways: [{ text: source, evidence: source }],
+      },
+      text: source,
+      provider: "extractive-local-v2",
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: 1,
+    };
+  });
+  const pending = POST(
+    new Request("http://127.0.0.1:3210/api/summarize", {
+      method: "POST",
+      headers: {
+        Origin: "http://127.0.0.1:3210",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ noteId: f.note, requestId: id }),
+    }),
+  );
+  await entry;
+  try {
+    expect((await row(f, id)).attempt_started).toBeTruthy();
+    expect(
+      (await f.client.from("notes").delete().eq("id", f.note).select()).data,
+    ).toHaveLength(1);
+  } finally {
+    release();
+  }
+  const response = await pending;
+  expect(response.status).toBe(409);
+  const body = await response.text();
+  expect(body).toContain('"code":"deleted"');
+  expect(body).not.toContain("PRIVATE_SYNTHETIC_SOURCE");
+  expect(summarize).toHaveBeenCalledTimes(1);
+  expect(await row(f, id)).toMatchObject({
+    status: "failed",
+    result: null,
+    summary: null,
+    source_deleted: true,
+    cost_status: "unknown",
+  });
+  await receipt("delete-during-blocked-provider-no-returned-text", f);
+});
+it("T16 positive-cost insufficient outcome consumes count, settles actual usage and replays immutable metadata", async () => {
+  const f = await fixture(),
+    id = randomUUID();
+  await reserve(f, id, 5000);
+  await begin(f, id);
+  const saved = await rpc("finish_generation_v2", {
+    p_user: f.id,
+    p_request: id,
+    p_result: { kind: "insufficient_content", takeaways: [] },
+    p_input: 10,
+    p_output: 2,
+    p_latency: 7,
+  });
+  expect(saved.kind).toBe("succeeded");
+  expect(saved.generation).toMatchObject({
+    result: { kind: "insufficient_content", takeaways: [] },
+    estimated_micro_usd: 17,
+    input_tokens: 10,
+    output_tokens: 2,
+    latency_ms: 7,
+    cost_status: "settled",
+  });
+  const cached = await reserve(f, id, 0, localConfig());
+  expect(cached.kind).toBe("cached");
+  expect(cached.generation).toEqual(saved.generation);
+  expect(await ledger(f)).toMatchObject({ c: 1, e: 17, ids: 1, tokens: 10 });
+  await receipt("nonzero-insufficient-settlement-cache", f);
+});
