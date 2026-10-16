@@ -1,65 +1,47 @@
 # Verification and evidence boundaries
 
-## Current structured-contract checkpoint
+All checks use synthetic data. The default app runs local sentence extraction;
+manual oracle outputs and provider doubles establish contracts, not live LLM quality.
+See [current Actions](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml)
+for the exact revision and required job status.
 
-Revision `d33f77a` passed [GitHub Actions run 38819722421](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38819722421)
-on 2026-10-16: lint/types, 18 unit/API checks, real local Supabase/DB tests, production
-build, browser bundle-secret check and desktop/mobile browser acceptance. This proves
-preservation of those existing checks for the structured-result/attempt-fence change.
-It does not establish all adversarial races, the expanded final test matrix or live quality.
+The complete checkpoint at [`34c694d`](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38826691940)
+passed both required jobs, including real desktop/mobile app acceptance, whole clean
+bootstrap, actual Phoenix readback, collector outage/recovery and launcher lifecycle.
+The expanded contract/migration checks at [`602b4d0`](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38827575492)
+passed 131 light tests, 36 real database checks, production build and genuine media
+capture. Its browser job stopped before execution because Node required an explicit
+JSON import attribute; the corrected discovery lists all eight tests. That failed
+job is not browser acceptance. Final independent verification remains a separate gate.
 
-Revision `0b3dc26` passed [GitHub Actions run 38824102295](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38824102295)
-on 2026-10-16. Both `verify` and `launcher-and-phoenix` passed: format/lint/types,
-32 focused unit/API/render/launcher checks, real local DB integration, production
-build, bundle-secret check, desktop/mobile browser acceptance, dependency audit,
-OSS secret scanning, and the offline evaluator. The evaluator checks 12 canonical
-synthetic cases, 40 facts, 11 named negative twins, actual local-provider kinds/evidence
-and persistent budget arithmetic.
+| Lane                      | Executed boundary                                                                                                                                                                        | Limit                                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Output/provider contracts | Strict schema/cardinality, original Unicode quotes, reported usage, serialized caps, one-call and refusal/truncation/error handling                                                      | Transport doubles and one actual 25-second hanging loopback endpoint; no model network                              |
+| Real database             | Actual Supabase JWT/RLS, Free5/Pro100, positive exposure/settlement, committed begin with lost acknowledgement, timeout/expiry, direct owner deletion and late finalization              | Controlled synthetic rows and SQL interleavings, no hosted data                                                     |
+| Migration/UTC             | Empty and baseline-seeded additive upgrades, byte-identical original migration, actual old service-role RPC denial; old/new UTC ledgers                                                  | Minimal Auth scaffold and clock substitution only in disposable migration databases; genuine Auth tested separately |
+| App browser               | Signup/login/logout, two users, persistence/replay, exact evidence/metrics, insufficient outcomes, literal HTML, sixth-request denial, deletion and responsive controls                  | Real Next/Auth/Postgres/local provider; desktop and iPhone viewport; no intercepted responses                       |
+| Evaluator                 | 12 manual canonical cases/40 facts, 11 named negative twins, source-span evidence support, numeric denominators and actual local-provider kind/evidence checks                           | Narrow frozen lexical oracle; manual output is not recorded live output                                             |
+| Judge/spending contract   | Strict 0–4 rubric/complete case parser, factual-only means, durable shared spending arithmetic, process lock and crash/restart                                                           | Labeled offline scores; no actual judge verdict or external spend                                                   |
+| Billing                   | Raw Stripe SDK signatures and signed handler, duplicates/out-of-order/rollback, real DB customer locks and concurrent checkout reuse                                                     | Stripe API doubled; no hosted Checkout/Portal payment                                                               |
+| Phoenix/privacy           | Actual route=response/DB/Phoenix trace ID; root plus reserve/provider/persist children with parents/statuses; stopped collector still permits saved summary, recovery exports next trace | Pinned local Phoenix20.22.0; synthetic logs/SDK/span canaries; no tracing cloud                                     |
+| Launcher                  | Whole command from clean checkout, startup/ready SIGINT, documented restart, ports/owned resources and owner-file preservation                                                           | Dedicated ephemeral local stack; setup-error subprocess boundary additionally doubled                               |
+| Repository gates          | Format/lint/types, dependency audit, OSS Gitleaks with negative twin, actual bad/corrected git-hook commits and client bundle/source-map canaries                                        | CodeQL analysis skipped while private; native public scanning pending                                               |
+| Media                     | Genuine 16-second GIF, current workspace/mobile, exact hashes/revisions                                                                                                                  | Synthetic identity, local extraction, unavailable billing; see [provenance](../demos/README.md)                     |
 
-The whole launcher started from a clean checkout, performed real Auth/note/summarize
-requests, checked persisted output, replay and deletion, and read the actual application
-trace back from pinned Phoenix 20.22.0. Response, DB and Phoenix trace IDs matched;
-all four generation/reserve/provider/persist spans had the expected parents/statuses
-and passed source/auth redaction checks. Shutdown released all dedicated app, DB and
-Phoenix ports. Sanitized evidence is in the run's `launcher-phoenix-evidence` artifact.
+The actual collector outage completed the summary with HTTP200 and saved DB output
+in about one second, then a subsequent trace returned all four spans after recovery.
+App/exporter stdout and returned spans passed source/auth canary checks. Earlier
+receiver startup failures were corrected by waiting for its database-backed `/readyz`
+endpoint; a running container alone did not establish receiver readiness.
 
-The earlier mandatory Phoenix check failed at `2f786aa` and again at `49e3be7`:
-exports reset before the receiver was ready, then readback returned HTTP 404. The
-corrected launcher waits for the receiver's database-backed `/readyz` endpoint before
-starting Next. The successful run recorded transport unavailable → HTTP 200 after
-20.2 seconds, then passed the unchanged actual-route four-span check. Compose's running
-container state alone did not establish HTTP readiness; no protocol or assertion changed.
+Live candidate evaluation and LLM-as-judge require explicit owner approval, a supported
+dated snapshot, provisioned key and one combined persistent spending cap. Actual
+Stripe-hosted test payment, hosted Auth/deployment and public visibility/scanning also
+remain pending owner prerequisites. No fixture, skipped job, redirect or local Docker
+result passes those gates. The result is a local reference, not full AI/hosted SaaS
+acceptance or a promise of semantic correctness or universal injection protection.
 
-These are executed checkpoint results. The full adversarial upgrade/race/error-path
-matrix, updated media and independent final verification remain required. No live
-model quality, hosted payment or hosted deployment acceptance is inferred.
-
-## What each lane establishes
-
-| Lane                          | Boundary                                                                       | Status                                              |
-| ----------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
-| Unit/provider contract        | Strict output, pricing/config and mocked transport/route faults                | Checkpoint passed; expanded verification pending    |
-| Local DB integration          | Actual Auth/RLS, concurrency, metering and transactional billing               | Checkpoint passed; full upgrade/race matrix pending |
-| Application browser           | Actual Next/Auth/DB, desktop/mobile, disclosed local extraction                | Checkpoint passed                                   |
-| Recorded evaluator            | Manual synthetic oracle, parser, clause/source-span metrics, negative controls | Passed in checkpoint CI                             |
-| Live LLM                      | Actual supported snapshot on frozen corpus                                     | Pending owner approval/key/budget                   |
-| Live judge                    | Actual model, frozen rubric and combined spend ledger                          | Pending owner approval/key/budget                   |
-| Stripe hosted test roundtrip  | Real hosted Checkout/Portal + real signed delivery                             | Pending owner test settings                         |
-| Phoenix                       | Actual summarize route/DB trace ID and four spans read back                    | Passed at `0b3dc26`                                 |
-| Whole launcher                | Clean bootstrap through HTTP/Auth/DB readiness and shutdown                    | Passed at `0b3dc26`                                 |
-| GIF                           | Real synthetic browser recording, no DOM substitution                          | Capture command ready; capture pending              |
-| Hosted demo                   | Real deployed URL, Auth confirmation/SMTP, TLS/pooler                          | Pending owner access/consent                        |
-| Public CodeQL/native scanning | Eligible public execution                                                      | Pending publication approval; skipped while private |
-
-No live model/judge, Stripe-hosted payment, paid service or hosted deployment was
-used to create this checkpoint. Manual oracle responses are not recorded live output.
-A mock collector is not Phoenix acceptance. Screenshots currently show the earlier
-real local app flow and will be replaced by genuine updated capture.
-
-## Reproduce
-
-See README commands, `evals/README.md`, `demos/README.md` and CI artifacts. Report the
-actual revision, environment and lane when publishing results. A missing prerequisite
-stays pending; a failed terminal check stays failed until fixed. Security scanning
-and an exact evidence check do not establish general semantic correctness or immunity
-to prompt injection.
+Reproduce with README commands and inspect the run artifacts: evaluator results,
+DB ledgers/migration receipts, browser traces/screenshots, hook controls, real Phoenix
+readback/outage/lifecycle and original recording. Browser files live under
+`test-results/browser` so earlier database receipts survive browser startup.

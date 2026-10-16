@@ -67,7 +67,12 @@ try {
   mkdirSync(join(bundle, ".next", "static"), { recursive: true });
   cpSync("scripts/check-client-secrets.mjs", join(bundle, "scan.mjs"));
   const canary = "SYNTHETIC_BROWSER_SECRET_CANARY_2026",
-    env = { ...process.env, OPENAI_API_KEY: canary };
+    env = {
+      ...process.env,
+      OPENAI_API_KEY: canary,
+      SUPABASE_DB_URL:
+        "postgresql://synthetic:DB_PASSWORD_CANARY_2026@127.0.0.1:56322/postgres",
+    };
   writeFileSync(
     join(bundle, ".next", "static", "client.js"),
     "console.log('public asset');\n",
@@ -92,6 +97,23 @@ try {
   assert.notEqual(badBundle.status, 0);
   assert.match(badBundle.stderr, /Server secret found/);
   assert.ok(!badBundle.stderr.includes(canary));
+  writeFileSync(
+    join(bundle, ".next", "static", "client.js.map"),
+    JSON.stringify({ sourcesContent: ["DB_PASSWORD_CANARY_2026"] }),
+  );
+  const passwordLeak = spawnSync(process.execPath, ["scan.mjs"], {
+    cwd: bundle,
+    encoding: "utf8",
+    env,
+  });
+  results.bundlePasswordCanaryExit = passwordLeak.status;
+  assert.notEqual(
+    passwordLeak.status,
+    0,
+    "A password-only leak must also be detected",
+  );
+  assert.match(passwordLeak.stderr, /Server secret found/);
+  assert.ok(!passwordLeak.stderr.includes("DB_PASSWORD_CANARY_2026"));
   assert.equal(readFileSync(staged, "utf8"), "export const control = 1;\n");
   mkdirSync("test-results", { recursive: true });
   writeFileSync(

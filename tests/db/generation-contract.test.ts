@@ -247,6 +247,14 @@ describe("T07/T08 count quotas and entitlement transitions", () => {
     const [removed] =
       await sql`delete from generations where user_id=${f.id} and request_id=(select request_id from generations where user_id=${f.id} limit 1) returning request_id`;
     expect(removed).toBeTruthy();
+    // A seeded success ledger, rather than only active reservations, must also
+    // admit exactly one winner at 99/100. No provider execution is claimed here.
+    await sql`update generations set status='succeeded',attempt_started=clock_timestamp(),result=${sql.json(output)},summary='Synthetic seeded success',cost_status='settled',estimated_micro_usd=0,exposure_micro_usd=0 where user_id=${f.id}`;
+    expect(
+      (
+        await sql`select count(*)::int as successes from generations where user_id=${f.id} and status='succeeded'`
+      )[0].successes,
+    ).toBe(99);
     const race = await Promise.all([reserve(f), reserve(f)]);
     expect(race.filter((r) => r.kind === "reserved")).toHaveLength(1);
     await receipt("pro-one-hundred", f);

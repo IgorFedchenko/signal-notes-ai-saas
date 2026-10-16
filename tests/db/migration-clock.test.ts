@@ -86,9 +86,11 @@ async function finish(
   db: ReturnType<typeof postgres>,
   user: string,
   id: string,
+  input = 0,
+  output = 0,
 ) {
   return (
-    await db`select finish_generation_v2(${user}::uuid,${id}::uuid,'{"kind":"insufficient_content","takeaways":[]}'::jsonb,0,0,1) as result`
+    await db`select finish_generation_v2(${user}::uuid,${id}::uuid,'{"kind":"insufficient_content","takeaways":[]}'::jsonb,${input},${output},1) as result`
   )[0].result;
 }
 afterAll(async () => {
@@ -233,7 +235,7 @@ describe("T13 SQL UTC-month clock seam isolated to disposable database", () => {
       const ack = await begin(db, f.id, r.id);
       expect(ack.kind).toBe("attempt");
       expect(ack.period).toBe("2026-12-01");
-      expect((await finish(db, f.id, r.id)).kind).toBe("succeeded");
+      expect((await finish(db, f.id, r.id, 10, 2)).kind).toBe("succeeded");
       await db`select fail_generation_v2(${f.id}::uuid,${unknown.id}::uuid)`;
       const next = await reserve(db, f);
       expect(next.kind).toBe("reserved");
@@ -242,7 +244,7 @@ describe("T13 SQL UTC-month clock seam isolated to disposable database", () => {
       const rows =
         await db`select period::text,count(*)filter(where status in('succeeded','reserved'))::int as c,count(*)filter(where cost_status='unknown')::int as unknown,coalesce(sum(exposure_micro_usd),0)::int as e from generations where user_id=${f.id} group by period order by period`;
       expect(rows).toEqual([
-        { period: "2026-12-01", c: 1, unknown: 1, e: 5000 },
+        { period: "2026-12-01", c: 1, unknown: 1, e: 5017 },
         { period: "2027-01-01", c: 1, unknown: 0, e: 0 },
       ]);
       const functionBody = (

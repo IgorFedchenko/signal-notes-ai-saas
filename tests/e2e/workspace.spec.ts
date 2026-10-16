@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { mkdirSync } from "node:fs";
-import dataset from "../../evals/dataset.json";
+import dataset from "../../evals/dataset.json" with { type: "json" };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 if (supabaseUrl !== "http://127.0.0.1:56321")

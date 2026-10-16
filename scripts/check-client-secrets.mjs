@@ -9,6 +9,17 @@ const secrets = [
 ]
   .map((key) => process.env[key])
   .filter((value) => value && value.length >= 12);
+const databaseUrl = process.env.SUPABASE_DB_URL;
+if (databaseUrl) {
+  try {
+    const password = decodeURIComponent(new URL(databaseUrl).password);
+    if (password.length >= 12) secrets.push(password);
+  } catch {
+    throw new Error(
+      "Invalid database URL supplied to browser secret scan (redacted).",
+    );
+  }
+}
 function scan(dir) {
   for (const item of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, item.name);

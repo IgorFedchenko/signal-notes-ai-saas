@@ -10,10 +10,10 @@ A small SaaS reference for clients shipping a Next.js product with Supabase Auth
 Stripe test billing, durable request keys, and understandable AI limits. All inputs
 are synthetic. MIT licensed; no employer/client code or data.
 
-![Earlier real local workspace acceptance](docs/screenshots/workspace.png)
+![Real local app: sign in, save a note, inspect evidence and usage, then open test billing](demos/signal-notes.gif)
 
 [Mobile](docs/screenshots/mobile.png) · [Verification](docs/VERIFICATION.md) ·
-[Demo recording](demos/README.md) — the updated GIF is pending real capture.
+[Workspace](docs/screenshots/workspace.png) · [Recording provenance](demos/README.md).
 
 ## Two-minute tour
 

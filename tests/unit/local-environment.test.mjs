@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { expect, it, vi, beforeEach } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import {
@@ -128,4 +129,63 @@ it("accepts only unset or development dotenv mode before reading any owner file"
   expect(() =>
     assertBootstrapEnvironment({ NODE_ENV: "development" }),
   ).not.toThrow();
+});
+
+it("T23 actual launcher source fails closed on setup failure and cleans only its owned stack", async () => {
+  const source = realFs
+    .readFileSync("scripts/demo.mjs", "utf8")
+    .replace(/^import[\s\S]*?;\n/gm, "");
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction(
+    "spawn",
+    "existsSync",
+    "delay",
+    "process",
+    "fetch",
+    "console",
+    "assertBootstrapEnvironment",
+    "localAppEnvironment",
+    source,
+  );
+  const fakeProcess = {
+    argv: [],
+    env: {},
+    platform: "linux",
+    execPath: "node",
+    on() {},
+    kill: vi.fn(),
+    exitCode: 0,
+  };
+  const spawn = vi.fn((command, args) => {
+    const child = new EventEmitter();
+    child.pid = 12345;
+    child.exitCode = null;
+    child.kill = vi.fn();
+    queueMicrotask(() => {
+      const code = args.includes("scripts/local-setup.mjs") ? 1 : 0;
+      child.exitCode = code;
+      child.emit("exit", code);
+    });
+    return child;
+  });
+  const fetch = vi.fn(),
+    log = vi.fn();
+  await execute(
+    spawn,
+    () => true,
+    vi.fn(),
+    fakeProcess,
+    fetch,
+    { log, error: vi.fn() },
+    () => {},
+    localAppEnvironment,
+  );
+  expect(fakeProcess.exitCode).toBe(1);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(spawn.mock.calls.map(([command, args]) => [command, args])).toEqual([
+    ["node", ["scripts/local-setup.mjs"]],
+    ["npx", ["--no-install", "supabase", "stop", "--no-backup"]],
+  ]);
+  expect(log).not.toHaveBeenCalled();
+  expect(fakeProcess.kill).not.toHaveBeenCalled();
 });

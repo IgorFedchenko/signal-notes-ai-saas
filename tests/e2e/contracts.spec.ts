@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import dataset from "../../evals/dataset.json";
+import dataset from "../../evals/dataset.json" with { type: "json" };
 const base = "http://127.0.0.1:3210";
 if (process.env.NEXT_PUBLIC_SUPABASE_URL !== "http://127.0.0.1:56321")
   throw Error("Dedicated local fixture stack required");
