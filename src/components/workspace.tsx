@@ -2,8 +2,6 @@
 import { useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowDownLeft,
-  ArrowRight,
   ArrowUpRight,
   BookOpen,
   Check,
@@ -11,7 +9,6 @@ import {
   Clock3,
   CreditCard,
   FileText,
-  LoaderCircle,
   LogOut,
   Plus,
   ShieldCheck,
@@ -20,21 +17,21 @@ import {
   X,
 } from "lucide-react";
 import { Brand } from "./brand";
+import type { Note, Generation, SummaryAnswer } from "./workspace/types";
+import {
+  createNote,
+  generateSummary,
+  openBilling,
+  signOut,
+  deleteNote,
+  ApiError,
+} from "./workspace/api";
+import { NoteComposer } from "./workspace/note-composer";
+import { SummaryPanel } from "./workspace/summary-panel";
+import { UsagePanel } from "./workspace/usage-panel";
+import { BillingPanel } from "./workspace/billing-panel";
 import { PLANS, effectivePlan, type BillingAccount } from "@/lib/plans";
 
-type Note = { id: string; title: string; content: string; created_at: string };
-type Generation = {
-  request_id: string;
-  note_id: string | null;
-  summary: string | null;
-  provider: string | null;
-  status: string;
-  period: string;
-  input_tokens: number;
-  output_tokens: number;
-  created_at: string;
-  expires_at: string;
-};
 type View = "notes" | "usage" | "billing";
 export function Workspace(props: {
   email: string;
@@ -43,7 +40,7 @@ export function Workspace(props: {
   account: BillingAccount;
   billingEnabled: boolean;
   fixture: boolean;
-  monthlyUsage: { used: number; tokens: number };
+  monthlyUsage: { used: number; tokens: number; exposureMicroUsd: number };
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -53,15 +50,11 @@ export function Workspace(props: {
   const [composer, setComposer] = useState(!props.notes.length);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [answer, setAnswer] = useState<{
-    noteId: string;
-    text: string;
-    provider: string;
-  } | null>(null);
+  const [answer, setAnswer] = useState<SummaryAnswer | null>(null);
   const request = useRef<{ noteId: string; key: string } | null>(null);
   const plan = effectivePlan(props.account);
   const { used, tokens } = props.monthlyUsage;
-  const completed = props.generations.filter((g) => g.status === "succeeded");
+
   const previous = props.generations.find(
     (g) => g.note_id === selected?.id && g.status === "succeeded",
   );
@@ -69,27 +62,19 @@ export function Workspace(props: {
     answer?.noteId === selected?.id
       ? answer
       : previous
-        ? { text: previous.summary!, provider: previous.provider! }
+        ? {
+            text: previous.summary,
+            result: previous.result,
+            provider: previous.provider,
+            inputTokens: previous.input_tokens,
+            outputTokens: previous.output_tokens,
+            estimatedMicroUsd: previous.estimated_micro_usd,
+            latencyMs: previous.latency_ms,
+            traceId: previous.trace_id,
+            promptVersion: previous.config?.promptVersion ?? "legacy-v1",
+          }
         : null;
 
-  async function call(path: string, body: unknown, method = "POST") {
-    const response = await fetch(path, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      if (
-        path === "/api/summarize" &&
-        response.status !== 503 &&
-        !(response.status === 409 && data.error.includes("processing"))
-      )
-        request.current = null;
-      throw new Error(data.error || "Please try again.");
-    }
-    return data;
-  }
   async function run(name: string, fn: () => Promise<void>) {
     setBusy(name);
     setError("");
@@ -105,7 +90,7 @@ export function Workspace(props: {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     await run("save", async () => {
-      const { note } = await call("/api/notes", {
+      const { note } = await createNote({
         title: form.get("title"),
         content: form.get("content"),
       });
@@ -120,14 +105,31 @@ export function Workspace(props: {
     await run("summary", async () => {
       if (request.current?.noteId !== selected.id)
         request.current = { noteId: selected.id, key: crypto.randomUUID() };
-      const result = await call("/api/summarize", {
-        noteId: selected.id,
-        requestId: request.current.key,
-      });
+      let result;
+      try {
+        result = await generateSummary({
+          noteId: selected.id,
+          requestId: request.current.key,
+        });
+      } catch (error) {
+        if (
+          error instanceof ApiError &&
+          !["pending", "temporarily_unavailable"].includes(error.code)
+        )
+          request.current = null;
+        throw error;
+      }
       setAnswer({
         noteId: selected.id,
         text: result.summary,
         provider: result.provider,
+        result: result.result,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        estimatedMicroUsd: result.estimatedMicroUsd,
+        latencyMs: result.latencyMs,
+        traceId: result.traceId,
+        promptVersion: result.promptVersion,
       });
       request.current = null;
       router.refresh();
@@ -135,7 +137,7 @@ export function Workspace(props: {
   }
   async function billing(kind: "checkout" | "portal") {
     await run(kind, async () => {
-      const result = await call(`/api/billing/${kind}`, {});
+      const result = await openBilling(kind);
       window.location.assign(result.url);
     });
   }
@@ -169,7 +171,7 @@ export function Workspace(props: {
             disabled={!!busy}
             onClick={() =>
               run("logout", async () => {
-                await call("/api/auth", { action: "logout" });
+                await signOut();
                 router.replace("/login");
                 router.refresh();
               })
@@ -210,7 +212,7 @@ export function Workspace(props: {
               disabled={!!busy}
               onClick={() =>
                 run("logout", async () => {
-                  await call("/api/auth", { action: "logout" });
+                  await signOut();
                   router.replace("/login");
                   router.refresh();
                 })
@@ -383,56 +385,12 @@ export function Workspace(props: {
               </div>
               <div className="note-detail">
                 {composer ? (
-                  <form onSubmit={save} className="note-composer">
-                    <div className="detail-toolbar">
-                      <span className="tag">
-                        <Plus size={13} /> A NEW THOUGHT
-                      </span>
-                      {selected && (
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label="Cancel new note"
-                          onClick={() => setComposer(false)}
-                        >
-                          <X size={18} />
-                        </button>
-                      )}
-                    </div>
-                    <label>
-                      Note title
-                      <input
-                        name="title"
-                        placeholder="Give your idea a name…"
-                        maxLength={120}
-                        required
-                      />
-                    </label>
-                    <label>
-                      Your note
-                      <textarea
-                        name="content"
-                        placeholder="Meeting notes, a rough idea, something worth remembering…"
-                        minLength={20}
-                        maxLength={12000}
-                        rows={9}
-                        required
-                      />
-                    </label>
-                    <div className="composer-footer">
-                      <small>20–12,000 characters · Plain text</small>
-                      <button className="button primary" disabled={!!busy}>
-                        {busy === "save" ? (
-                          <LoaderCircle className="spin" size={16} />
-                        ) : (
-                          <>
-                            <Check size={16} />
-                            Save note
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
+                  <NoteComposer
+                    onSave={save}
+                    busy={busy}
+                    selected={!!selected}
+                    onCancel={() => setComposer(false)}
+                  />
                 ) : selected ? (
                   <>
                     <div className="detail-toolbar">
@@ -451,11 +409,7 @@ export function Workspace(props: {
                               )
                             )
                               return;
-                            await call(
-                              "/api/notes",
-                              { id: selected.id },
-                              "DELETE",
-                            );
+                            await deleteNote(selected.id);
                             const remaining = notes.filter(
                               (n) => n.id !== selected.id,
                             );
@@ -480,60 +434,13 @@ export function Workspace(props: {
                       {selected.content.split(/\s+/).length} words
                     </div>
                     <p className="note-body">{selected.content}</p>
-                    <div className="summary-panel">
-                      <div className="summary-heading">
-                        <span>
-                          <Sparkles size={18} />
-                          <strong>The important parts</strong>
-                        </span>
-                        <span className="summary-label">
-                          {props.fixture ? "LOCAL DEMO" : "AI SUMMARY"}
-                        </span>
-                      </div>
-                      {currentAnswer ? (
-                        <>
-                          <p className="summary-text">{currentAnswer.text}</p>
-                          <div className="summary-meta">
-                            <Check size={13} />
-                            Saved to your workspace{" "}
-                            <span>{currentAnswer.provider}</span>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="summary-empty">
-                          <p>A long note. A few clear takeaways.</p>
-                          <small>
-                            Bring the important parts to the surface.
-                          </small>
-                        </div>
-                      )}
-                      <div className="summary-actions">
-                        <small>
-                          {used >= PLANS[plan].limit
-                            ? "Monthly limit reached"
-                            : "Uses 1 summary from your monthly plan"}
-                        </small>
-                        <button
-                          className="button primary"
-                          disabled={!!busy || used >= PLANS[plan].limit}
-                          onClick={generate}
-                        >
-                          {busy === "summary" ? (
-                            <>
-                              <LoaderCircle className="spin" size={16} />
-                              Finding the signal…
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles size={15} />
-                              {currentAnswer
-                                ? "Summarize again"
-                                : "Summarize note"}
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
+                    <SummaryPanel
+                      answer={currentAnswer}
+                      fixture={props.fixture}
+                      busy={busy}
+                      limited={used >= PLANS[plan].limit}
+                      generate={generate}
+                    />
                     <div className="note-footnote">
                       <ShieldCheck size={13} />
                       {props.fixture
@@ -546,128 +453,23 @@ export function Workspace(props: {
             </section>
           )}
           {view === "usage" && (
-            <section className="activity-panel">
-              <div className="panel-heading">
-                <h2>Summary activity</h2>
-                <span className="tag">
-                  {tokens.toLocaleString()} MODEL TOKENS THIS MONTH
-                </span>
-              </div>
-              {completed.length === 0 ? (
-                <div className="empty-state">
-                  <Sparkles size={28} />
-                  <h3>A fresh start.</h3>
-                  <p>Your first summary will appear here.</p>
-                  <button
-                    className="button secondary"
-                    onClick={() => setView("notes")}
-                  >
-                    Go to notes <ArrowRight size={15} />
-                  </button>
-                </div>
-              ) : (
-                <div className="activity-table">
-                  <div className="table-row table-head">
-                    <span>NOTE</span>
-                    <span>PROVIDER</span>
-                    <span>TOKENS</span>
-                    <span>CREATED</span>
-                  </div>
-                  {completed.map((g) => (
-                    <div className="table-row" key={g.request_id}>
-                      <span>
-                        <ArrowDownLeft size={15} />
-                        {notes.find((n) => n.id === g.note_id)?.title ??
-                          "Deleted note"}
-                      </span>
-                      <span>{g.provider}</span>
-                      <span>{g.input_tokens + g.output_tokens}</span>
-                      <span>
-                        {new Date(g.created_at).toLocaleDateString("en-US")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="panel-footnote">
-                Usage includes completed summaries and active reservations.
-                Failed attempts release their reservation. Local extraction
-                records zero model tokens.
-              </p>
-            </section>
+            <UsagePanel
+              generations={props.generations}
+              notes={notes}
+              tokens={tokens}
+              exposureMicroUsd={props.monthlyUsage.exposureMicroUsd}
+              plan={plan}
+              onNotes={() => setView("notes")}
+            />
           )}
           {view === "billing" && (
-            <section className="billing-panel">
-              <div className="price-grid">
-                {(["free", "pro"] as const).map((p) => (
-                  <article
-                    key={p}
-                    className={`price-card ${p === "pro" ? "featured" : ""}`}
-                  >
-                    <span className="tag">
-                      {PLANS[p].name}
-                      {p === plan ? " · CURRENT PLAN" : ""}
-                    </span>
-                    <h3>
-                      {PLANS[p].price}
-                      <small>/ month</small>
-                    </h3>
-                    <p>
-                      {p === "free"
-                        ? "For a fresh perspective."
-                        : "For a mind full of ideas."}
-                    </p>
-                    <div className="price-feature">
-                      <Check size={16} />
-                      {PLANS[p].limit} summaries per UTC month
-                    </div>
-                    <div className="price-feature">
-                      <Check size={16} />
-                      Private notes & summary history
-                    </div>
-                    <button
-                      className={`button ${p === "pro" ? "primary" : "secondary"}`}
-                      disabled={
-                        !!busy ||
-                        p === plan ||
-                        p === "free" ||
-                        !props.billingEnabled
-                      }
-                      onClick={() => billing("checkout")}
-                    >
-                      {p === plan
-                        ? "Your current plan"
-                        : p === "free"
-                          ? "Manage in billing portal"
-                          : "Try Pro in test mode"}
-                      <ArrowUpRight size={15} />
-                    </button>
-                  </article>
-                ))}
-              </div>
-              <div className="billing-note">
-                <CreditCard size={20} />
-                <div>
-                  <h3>Billing, on your terms.</h3>
-                  <p>
-                    {props.billingEnabled
-                      ? "Stripe test mode is enabled. Use test payment details only. No real money is collected."
-                      : "Stripe test billing is not connected in this local demo. Checkout becomes available when the owner configures test credentials."}
-                  </p>
-                  <button
-                    className="text-button"
-                    disabled={
-                      !!busy ||
-                      !props.billingEnabled ||
-                      !props.account.stripe_customer_id
-                    }
-                    onClick={() => billing("portal")}
-                  >
-                    Open customer portal <ArrowUpRight size={14} />
-                  </button>
-                </div>
-              </div>
-            </section>
+            <BillingPanel
+              account={props.account}
+              billingEnabled={props.billingEnabled}
+              busy={busy}
+              plan={plan}
+              billing={billing}
+            />
           )}
           <div className="workspace-footer">
             <span>

@@ -3,13 +3,14 @@ import { existsSync } from "node:fs";
 if (existsSync(".env.local")) process.loadEnvFile(".env.local");
 export default defineConfig({
   testDir: "./tests/e2e",
+  outputDir: "test-results/browser",
   fullyParallel: false,
   workers: 1,
   retries: 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: "http://127.0.0.1:3210",
-    trace: "retain-on-failure",
+    trace: "on",
     screenshot: "only-on-failure",
   },
   projects: [

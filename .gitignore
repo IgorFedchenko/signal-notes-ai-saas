@@ -10,3 +10,5 @@ supabase/.temp/
 supabase/.branches/
 .vercel/
 .DS_Store
+evals/results/
+demos/raw/

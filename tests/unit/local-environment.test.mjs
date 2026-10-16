@@ -1,0 +1,191 @@
+import { EventEmitter } from "node:events";
+import { expect, it, vi, beforeEach } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import {
+  assertBootstrapEnvironment,
+  assertDedicatedStack,
+  localAppEnvironment,
+} from "../../scripts/local-environment.mjs";
+vi.mock("node:fs", () => ({ existsSync: vi.fn(), readFileSync: vi.fn() }));
+const realFs = await vi.importActual("node:fs");
+const local = {
+  NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:56321",
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "synthetic-anon",
+  SUPABASE_SERVICE_ROLE_KEY: "synthetic-service",
+  SUPABASE_DB_URL: "postgresql://postgres:synthetic@127.0.0.1:56322/postgres",
+};
+beforeEach(() => {
+  vi.clearAllMocks();
+  existsSync.mockReturnValue(false);
+});
+it("rejects inherited hosted/live overrides before launcher processes or sockets", async () => {
+  const source = realFs
+    .readFileSync("scripts/demo.mjs", "utf8")
+    .replace(/^import[\s\S]*?;\n/gm, "");
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction(
+    "spawn",
+    "existsSync",
+    "delay",
+    "process",
+    "fetch",
+    "console",
+    "assertBootstrapEnvironment",
+    "localAppEnvironment",
+    source,
+  );
+  for (const [key, value] of Object.entries({
+    NEXT_PUBLIC_SUPABASE_URL: "https://synthetic.example.invalid",
+    SUPABASE_DB_URL:
+      "postgresql://synthetic@synthetic.example.invalid/postgres",
+    SUPABASE_SERVICE_ROLE_KEY: "synthetic-hosted-service",
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:
+      "https://synthetic.example.invalid/v1/traces",
+    STRIPE_SECRET_KEY: "sk_live_synthetic",
+    OPENAI_API_KEY: "synthetic-key",
+    AI_LIVE_APPROVED: "true",
+    NODE_ENV: "test",
+  })) {
+    const fakeProcess = {
+      argv: [],
+      env: { [key]: value },
+      on() {},
+      exitCode: 0,
+    };
+    const spawn = vi.fn(),
+      fetch = vi.fn();
+    await execute(
+      spawn,
+      existsSync,
+      vi.fn(),
+      fakeProcess,
+      fetch,
+      { error() {}, log() {} },
+      () => assertBootstrapEnvironment(fakeProcess.env),
+      localAppEnvironment,
+    );
+    expect(fakeProcess.exitCode, key).toBe(1);
+    expect(spawn, key).not.toHaveBeenCalled();
+    expect(fetch, key).not.toHaveBeenCalled();
+  }
+});
+it("protects owner dotenv files and only accepts exact dedicated connection targets", () => {
+  existsSync.mockImplementation((path) => path === ".env.local");
+  readFileSync.mockReturnValue("# owner-managed synthetic file\n");
+  expect(() => assertBootstrapEnvironment({})).toThrow(
+    "owner_managed_environment",
+  );
+  expect(readFileSync).toHaveBeenCalledTimes(1);
+  existsSync.mockImplementation((path) => path === ".env.development.local");
+  expect(() => assertBootstrapEnvironment({})).toThrow(
+    "owner_managed_environment",
+  );
+  expect(() => assertDedicatedStack(local)).not.toThrow();
+  expect(() =>
+    assertDedicatedStack({
+      ...local,
+      SUPABASE_DB_URL:
+        "postgresql://synthetic@external.example.invalid:56322/postgres",
+    }),
+  ).toThrow("dedicated_stack_required");
+});
+it("constructs one controlled child environment from verified local stack values", () => {
+  readFileSync.mockReturnValue(
+    `# GENERATED LOCAL SIGNAL NOTES\n${Object.entries(local)
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n")}\nSTRIPE_SECRET_KEY=sk_live_synthetic_file_marker\n`,
+  );
+  const env = localAppEnvironment(false, {
+    PATH: "/synthetic/bin",
+    OPENAI_API_KEY: "synthetic-key",
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "https://synthetic.example.invalid",
+    SUPABASE_DB_URL: "postgresql://synthetic@external.example.invalid/postgres",
+  });
+  expect(env).toMatchObject({
+    ...local,
+    NODE_ENV: "development",
+    AI_PROVIDER: "fixture",
+    AI_LIVE_APPROVED: "false",
+    APP_URL: "http://127.0.0.1:3210",
+    PATH: "/synthetic/bin",
+  });
+  expect(env.OPENAI_API_KEY).toBeUndefined();
+  expect(env.STRIPE_SECRET_KEY).toBeUndefined();
+  expect(env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBeUndefined();
+  expect(localAppEnvironment(true, {}).OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).toBe(
+    "http://127.0.0.1:56006/v1/traces",
+  );
+});
+
+it("accepts only unset or development dotenv mode before reading any owner file", () => {
+  for (const mode of ["test", "production", "custom", ""]) {
+    expect(() => assertBootstrapEnvironment({ NODE_ENV: mode })).toThrow(
+      "local_environment_mode",
+    );
+  }
+  expect(existsSync).not.toHaveBeenCalled();
+  expect(readFileSync).not.toHaveBeenCalled();
+  expect(() => assertBootstrapEnvironment({})).not.toThrow();
+  expect(() =>
+    assertBootstrapEnvironment({ NODE_ENV: "development" }),
+  ).not.toThrow();
+});
+
+it("T23 actual launcher source fails closed on setup failure and cleans only its owned stack", async () => {
+  const source = realFs
+    .readFileSync("scripts/demo.mjs", "utf8")
+    .replace(/^import[\s\S]*?;\n/gm, "");
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction(
+    "spawn",
+    "existsSync",
+    "delay",
+    "process",
+    "fetch",
+    "console",
+    "assertBootstrapEnvironment",
+    "localAppEnvironment",
+    source,
+  );
+  const fakeProcess = {
+    argv: [],
+    env: {},
+    platform: "linux",
+    execPath: "node",
+    on() {},
+    kill: vi.fn(),
+    exitCode: 0,
+  };
+  const spawn = vi.fn((command, args) => {
+    const child = new EventEmitter();
+    child.pid = 12345;
+    child.exitCode = null;
+    child.kill = vi.fn();
+    queueMicrotask(() => {
+      const code = args.includes("scripts/local-setup.mjs") ? 1 : 0;
+      child.exitCode = code;
+      child.emit("exit", code);
+    });
+    return child;
+  });
+  const fetch = vi.fn(),
+    log = vi.fn();
+  await execute(
+    spawn,
+    () => true,
+    vi.fn(),
+    fakeProcess,
+    fetch,
+    { log, error: vi.fn() },
+    () => {},
+    localAppEnvironment,
+  );
+  expect(fakeProcess.exitCode).toBe(1);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(spawn.mock.calls.map(([command, args]) => [command, args])).toEqual([
+    ["node", ["scripts/local-setup.mjs"]],
+    ["npx", ["--no-install", "supabase", "stop", "--no-backup"]],
+  ]);
+  expect(log).not.toHaveBeenCalled();
+  expect(fakeProcess.kill).not.toHaveBeenCalled();
+});

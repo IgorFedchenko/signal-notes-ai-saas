@@ -4,17 +4,42 @@ import { POST } from "@/app/api/summarize/route";
 import { identity } from "@/lib/http";
 import { adminClient } from "@/lib/supabase/admin";
 import { summarize } from "@/lib/ai";
-vi.mock("@/lib/http", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/http")>()),
+import { generationConfig } from "@/lib/ai/pricing";
+vi.mock("@/lib/http", async (original) => ({
+  ...(await original<typeof import("@/lib/http")>()),
   identity: vi.fn(),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ adminClient: vi.fn() }));
 vi.mock("@/lib/ai", () => ({ summarize: vi.fn() }));
-const user = randomUUID();
-const note = randomUUID();
-const requestId = randomUUID();
-const rpc = vi.fn();
-const from = vi.fn();
+const user = randomUUID(),
+  note = randomUUID(),
+  requestId = randomUUID();
+const rpc = vi.fn(),
+  from = vi.fn();
+const result = {
+  kind: "summary" as const,
+  takeaways: [
+    {
+      text: "Synthetic local test note.",
+      evidence: "Synthetic local test note.",
+    },
+  ],
+};
+let traceId: string;
+function row() {
+  return {
+    summary: "• Synthetic local test note.",
+    result,
+    provider: "extractive-local-v2",
+    input_tokens: 31,
+    output_tokens: 9,
+    estimated_micro_usd: 0,
+    latency_ms: 4,
+    trace_id: traceId,
+    config: generationConfig(),
+    contract_version: "v2",
+  };
+}
 function request(origin = "http://127.0.0.1:3210") {
   return new Request(`${origin}/api/summarize`, {
     method: "POST",
@@ -25,6 +50,7 @@ function request(origin = "http://127.0.0.1:3210") {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("APP_URL", "http://127.0.0.1:3210");
+  vi.stubEnv("AI_PROVIDER", "fixture");
   from.mockReturnValue({
     select: () => ({
       eq: () => ({
@@ -42,20 +68,91 @@ beforeEach(() => {
   vi.mocked(adminClient).mockReturnValue({ rpc } as unknown as ReturnType<
     typeof adminClient
   >);
+  rpc.mockImplementation(async (name, args) => {
+    if (name === "reserve_generation_v2") {
+      traceId = args.p_trace;
+      return { data: { kind: "reserved" }, error: null };
+    }
+    if (name === "begin_generation_attempt_v2")
+      return {
+        data: {
+          kind: "attempt",
+          config: generationConfig(),
+          period: "2026-10-01",
+          reservedMicroUsd: 0,
+          traceId,
+          databaseNow: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 119000).toISOString(),
+        },
+        error: null,
+      };
+    if (name === "finish_generation_v2")
+      return { data: { kind: "succeeded", generation: row() }, error: null };
+    return { data: null, error: null };
+  });
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 describe("summarization HTTP boundary", () => {
-  it("returns persisted output for duplicate requests without another model call", async () => {
-    rpc.mockResolvedValue({
-      data: { kind: "cached", summary: "Saved summary", provider: "fixture" },
-    });
+  it("returns persisted duplicate output without another provider call", async () => {
+    traceId = "a".repeat(32);
+    rpc.mockResolvedValue({ data: { kind: "cached", generation: row() } });
     const response = await POST(request());
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ cached: true });
     expect(summarize).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledTimes(1);
   });
-  it("fails before contacting the model when quota is exhausted or ownership fails", async () => {
+  it("replays a persisted result when current live generation is disabled or the prompt changes", async () => {
+    traceId = "a".repeat(32);
+    const saved = { ...row(), config: { promptVersion: "notes-previous" } };
+    vi.stubEnv("AI_PROVIDER", "unconfigured");
+    rpc.mockResolvedValue({ data: { kind: "cached", generation: saved } });
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      cached: true,
+      promptVersion: "notes-previous",
+    });
+    expect(summarize).not.toHaveBeenCalled();
+  });
+  it("replays saved output after a valid current input-cap reduction", async () => {
+    traceId = "b".repeat(32);
+    const saved = row();
+    vi.stubEnv("AI_INPUT_BYTE_CAP", "1024");
+    rpc.mockResolvedValue({ data: { kind: "cached", generation: saved } });
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      cached: true,
+      result: saved.result,
+      traceId: saved.trace_id,
+      estimatedMicroUsd: saved.estimated_micro_usd,
+      promptVersion: saved.config.promptVersion,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "reserve_generation_v2",
+      expect.objectContaining({ p_config: null }),
+    );
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(summarize).not.toHaveBeenCalled();
+  });
+  it("rejects a new request after the same input-cap reduction without a permit/provider call", async () => {
+    vi.stubEnv("AI_INPUT_BYTE_CAP", "1024");
+    rpc.mockImplementation(async (name, args) => {
+      expect(name).toBe("reserve_generation_v2");
+      expect(args.p_config).toBeNull();
+      return { data: null, error: new Error("invalid_generation_config") };
+    });
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "provider_invalid" });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(summarize).not.toHaveBeenCalled();
+  });
+  it("rejects exhausted quota and foreign ownership before the provider", async () => {
     rpc.mockResolvedValue({ data: { kind: "limit" } });
     expect((await POST(request())).status).toBe(429);
     from.mockReturnValue({
@@ -68,38 +165,171 @@ describe("summarization HTTP boundary", () => {
     expect((await POST(request())).status).toBe(404);
     expect(summarize).not.toHaveBeenCalled();
   });
-  it("releases quota on upstream failure and sanitizes the error body", async () => {
-    rpc.mockResolvedValue({ data: { kind: "reserved" } });
+  it("releases count on upstream failure and sanitizes the error body", async () => {
     vi.mocked(summarize).mockRejectedValue(
       new Error("Synthetic provider payload must stay private"),
     );
     const response = await POST(request());
     expect(response.status).toBe(503);
     expect(await response.text()).not.toContain("provider payload");
-    expect(rpc).toHaveBeenCalledWith("fail_generation", {
+    expect(rpc).toHaveBeenCalledWith("fail_generation_v2", {
       p_user: user,
       p_request: requestId,
     });
   });
-  it("persists actual tokens before returning a successful summary", async () => {
-    rpc.mockImplementation(async (name) => ({
-      data: name === "reserve_generation" ? { kind: "reserved" } : true,
-      error: null,
-    }));
+  it("requires positive begin acknowledgement and makes zero calls on lost acknowledgement", async () => {
+    const normal = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "begin_generation_attempt_v2"
+        ? { data: null, error: new Error("ack lost") }
+        : normal(name, args),
+    );
+    expect((await POST(request())).status).toBe(503);
+    expect(summarize).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("fail_generation_v2", {
+      p_user: user,
+      p_request: requestId,
+    });
+  });
+  it("makes zero calls when the database attempt fence denies an expired/replayed permit", async () => {
+    const normal = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "begin_generation_attempt_v2"
+        ? { data: { kind: "attempt_denied" }, error: null }
+        : normal(name, args),
+    );
+    expect((await POST(request())).status).toBe(409);
+    expect(summarize).not.toHaveBeenCalled();
+  });
+  it("makes zero calls if the positive acknowledgement arrives after its remaining DB TTL", async () => {
+    let monotonic = 100;
+    vi.spyOn(performance, "now").mockImplementation(() => monotonic);
+    const normal = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) => {
+      if (name !== "begin_generation_attempt_v2") return normal(name, args);
+      monotonic = 5000;
+      return {
+        data: {
+          kind: "attempt",
+          config: generationConfig(),
+          period: "2026-10-01",
+          reservedMicroUsd: 0,
+          traceId,
+          databaseNow: "2026-10-16T00:00:00Z",
+          expiresAt: "2026-10-16T00:00:01Z",
+        },
+        error: null,
+      };
+    });
+    expect((await POST(request())).status).toBe(409);
+    expect(summarize).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("fail_generation_v2", {
+      p_user: user,
+      p_request: requestId,
+    });
+  });
+  it("passes the bound snapshot to the provider and persists usage before returning", async () => {
     vi.mocked(summarize).mockResolvedValue({
-      text: "• Synthetic result",
-      provider: "test-model",
+      text: "• Synthetic local test note.",
+      result,
+      provider: "extractive-local-v2",
       inputTokens: 31,
       outputTokens: 9,
+      latencyMs: 4,
     });
     expect((await POST(request())).status).toBe(200);
-    expect(rpc).toHaveBeenCalledWith(
-      "finish_generation",
-      expect.objectContaining({ p_input: 31, p_output: 9, p_user: user }),
+    expect(summarize).toHaveBeenCalledWith(
+      "Synthetic local test note.",
+      generationConfig(),
+      expect.any(Number),
     );
-    expect(rpc).not.toHaveBeenCalledWith("fail_generation", expect.anything());
+    expect(rpc).toHaveBeenCalledWith(
+      "finish_generation_v2",
+      expect.objectContaining({
+        p_input: 31,
+        p_output: 9,
+        p_user: user,
+        p_result: result,
+      }),
+    );
+    expect(rpc).not.toHaveBeenCalledWith(
+      "fail_generation_v2",
+      expect.anything(),
+    );
   });
-  it("rejects cross-origin requests before reading credentials or data", async () => {
+  it("T06 uses the immutable acknowledged snapshot even if environment changes after reservation", async () => {
+    const snapshot = generationConfig(),
+      saved = row();
+    const original = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) => {
+      if (name === "reserve_generation_v2") {
+        const reply = await original(name, args);
+        vi.stubEnv("AI_PROVIDER", "disabled-after-reservation");
+        vi.stubEnv("AI_OUTPUT_TOKEN_CAP", "1");
+        return reply;
+      }
+      if (name === "begin_generation_attempt_v2")
+        return {
+          data: {
+            kind: "attempt",
+            config: snapshot,
+            period: "2026-10-01",
+            reservedMicroUsd: 0,
+            traceId,
+            databaseNow: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 119000).toISOString(),
+          },
+          error: null,
+        };
+      if (name === "finish_generation_v2")
+        return {
+          data: {
+            kind: "succeeded",
+            generation: { ...saved, trace_id: traceId },
+          },
+          error: null,
+        };
+      return original(name, args);
+    });
+    vi.mocked(summarize).mockResolvedValue({
+      text: saved.summary,
+      result,
+      provider: snapshot.model,
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: 1,
+    });
+    expect((await POST(request())).status).toBe(200);
+    expect(summarize).toHaveBeenCalledWith(
+      "Synthetic local test note.",
+      snapshot,
+      expect.any(Number),
+    );
+  });
+  it.each([
+    { noteId: "invalid", requestId },
+    { noteId: note, requestId: "invalid" },
+    { noteId: note, requestId, model: "forged" },
+    { noteId: note, requestId, outputCap: 2001 },
+  ])(
+    "T01 denies malformed identifiers and overrides before reservation %#",
+    async (body) => {
+      const response = await POST(
+        new Request("http://127.0.0.1:3210/api/summarize", {
+          method: "POST",
+          headers: {
+            Origin: "http://127.0.0.1:3210",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+      expect(response.status).toBe(400);
+      expect(rpc).not.toHaveBeenCalled();
+      expect(summarize).not.toHaveBeenCalled();
+    },
+  );
+  it("rejects cross-origin calls before credentials", async () => {
     expect((await POST(request("https://untrusted.example"))).status).toBe(403);
     expect(identity).not.toHaveBeenCalled();
     expect(adminClient).not.toHaveBeenCalled();

@@ -1,0 +1,41 @@
+{
+  "capturedAt": "2026-10-16",
+  "syntheticIdentity": "tour@signal.local (workspace/mobile/GIF)",
+  "domOrRouteSubstitution": false,
+  "gif": {
+    "width": 1024,
+    "height": 800,
+    "frames": 128,
+    "durationSeconds": 16.01
+  },
+  "media": [
+    {
+      "file": "demos/signal-notes.gif",
+      "sourceSha": "602b4d0e3967aaf728e45ac486b9fbce700f9c85",
+      "run": "https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38827575492",
+      "lane": "genuine real-browser local-extractive app",
+      "sha256": "5d82bf9877277451ae9c3ad9f46f53b75935ba97b8b3f4fef4f531030cf8585e"
+    },
+    {
+      "file": "docs/screenshots/workspace.png",
+      "sourceSha": "602b4d0e3967aaf728e45ac486b9fbce700f9c85",
+      "run": "https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38827575492",
+      "lane": "genuine real-browser local-extractive app",
+      "sha256": "751017224e9489eb440139cae5702c9c936e2a05da974567ebe90c1ae8ff2757"
+    },
+    {
+      "file": "docs/screenshots/mobile.png",
+      "sourceSha": "602b4d0e3967aaf728e45ac486b9fbce700f9c85",
+      "run": "https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38827575492",
+      "lane": "genuine real-browser local-extractive app",
+      "sha256": "3f158a5817b29340e1f9c281698446478d851bb40ca36055808ecd2c847f8c20"
+    },
+    {
+      "file": "docs/screenshots/landing.png",
+      "sourceSha": "34c694d369f070318905e81d9e8521c58faf867c",
+      "run": "https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38826691940",
+      "lane": "genuine real-browser local-extractive app",
+      "sha256": "01d69d49b043f7ef823838174ccc57039dbb99d90be54cbe46f029ee8bf3280e"
+    }
+  ]
+}

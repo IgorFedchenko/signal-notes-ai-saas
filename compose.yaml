@@ -1,0 +1,13 @@
+name: signal-notes-observability
+services:
+  phoenix:
+    profiles: [observability]
+    image: arizephoenix/phoenix:20.22.0@sha256:fa28e9cd96dd554a63ff9bf55ca40799d470ec75bdd7dd85a2dee97b9e8c704c
+    ports:
+      - "127.0.0.1:56006:6006"
+    environment:
+      PHOENIX_ENABLE_AUTH: "false"
+      PHOENIX_ENABLE_PROMETHEUS: "false"
+      PHOENIX_WORKING_DIR: /tmp/phoenix
+    tmpfs:
+      - /tmp/phoenix

@@ -4,6 +4,11 @@ import { randomUUID } from "node:crypto";
 import { billingSql, reconcileEvent } from "@/lib/billing/store";
 import { checkoutForUser } from "@/lib/billing/checkout";
 import type Stripe from "stripe";
+import { generationConfig } from "@/lib/ai/pricing";
+const fixtureConfig = () => {
+  process.env.AI_PROVIDER = "fixture";
+  return generationConfig();
+};
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 if (
@@ -155,10 +160,13 @@ describe("real Supabase Auth + RLS", () => {
 
 describe("atomic metering and retry behavior", () => {
   const reserve = (request = randomUUID(), note = aliceNote) =>
-    admin.rpc("reserve_generation", {
+    admin.rpc("reserve_generation_v2", {
       p_user: ids[0],
       p_note: note,
       p_request: request,
+      p_config: fixtureConfig(),
+      p_reserved: 0,
+      p_trace: "a".repeat(32),
     });
   it("admits exactly five of fifteen concurrent Free requests", async () => {
     const requests = Array.from({ length: 15 }, () => randomUUID());
@@ -181,16 +189,38 @@ describe("atomic metering and retry behavior", () => {
     const params = {
       p_user: ids[0],
       p_request: data!.request_id,
-      p_summary: "• Stored synthetic summary",
-      p_provider: "fixture",
+      p_result: {
+        kind: "summary",
+        takeaways: [
+          {
+            text: "Stored synthetic summary",
+            evidence: "Synthetic private note visible only to Alice.",
+          },
+        ],
+      },
+      p_latency: 1,
       p_input: 12,
       p_output: 6,
     };
-    expect((await admin.rpc("finish_generation", params)).data).toBe(true);
-    expect((await admin.rpc("finish_generation", params)).data).toBe(false);
+    expect(
+      (
+        await admin.rpc("begin_generation_attempt_v2", {
+          p_user: ids[0],
+          p_request: data!.request_id,
+        })
+      ).data.kind,
+    ).toBe("attempt");
+    expect((await admin.rpc("finish_generation_v2", params)).data.kind).toBe(
+      "succeeded",
+    );
+    expect((await admin.rpc("finish_generation_v2", params)).data.kind).toBe(
+      "finish_denied",
+    );
     expect((await reserve(data!.request_id)).data).toMatchObject({
       kind: "cached",
-      summary: "• Stored synthetic summary",
+      generation: expect.objectContaining({
+        summary: "• Stored synthetic summary",
+      }),
     });
     expect((await reserve(randomUUID(), bobNote)).data.kind).toBe("not_found");
     const other = await alice
@@ -213,7 +243,7 @@ describe("atomic metering and retry behavior", () => {
       .eq("status", "reserved")
       .limit(1)
       .single();
-    await admin.rpc("fail_generation", {
+    await admin.rpc("fail_generation_v2", {
       p_user: ids[0],
       p_request: pending!.request_id,
     });
@@ -228,16 +258,16 @@ describe("atomic metering and retry behavior", () => {
     expect((await reserve(randomUUID())).data.kind).toBe("reserved");
     expect(
       (
-        await admin.rpc("finish_generation", {
+        await admin.rpc("finish_generation_v2", {
           p_user: ids[0],
           p_request: newId,
-          p_summary: "Too late",
-          p_provider: "fixture",
+          p_result: { kind: "insufficient_content", takeaways: [] },
+          p_latency: 0,
           p_input: 0,
           p_output: 0,
         })
-      ).data,
-    ).toBe(false);
+      ).data.kind,
+    ).toBe("finish_denied");
   });
 });
 
@@ -275,10 +305,13 @@ describe("transactional Stripe reconciliation", () => {
     // An entitlement increase actually changes the database quota behavior.
     expect(
       (
-        await admin.rpc("reserve_generation", {
+        await admin.rpc("reserve_generation_v2", {
           p_user: ids[0],
           p_note: aliceNote,
           p_request: randomUUID(),
+          p_config: fixtureConfig(),
+          p_reserved: 0,
+          p_trace: "a".repeat(32),
         })
       ).data.kind,
     ).toBe("reserved");
@@ -382,28 +415,22 @@ describe("serialized checkout sessions", () => {
     }
   });
   it("allows a fresh checkout after the previous subscription has ended", async () => {
-    const subscriptions = vi
-      .fn()
-      .mockResolvedValue({
-        data: [{ id: "sub_ended", status: "canceled" }],
-        has_more: false,
-      });
-    const create = vi
-      .fn()
-      .mockResolvedValue({
-        id: `cs_${prefix}_renew`,
-        url: "https://checkout.stripe.com/synthetic-renewal",
-      });
+    const subscriptions = vi.fn().mockResolvedValue({
+      data: [{ id: "sub_ended", status: "canceled" }],
+      has_more: false,
+    });
+    const create = vi.fn().mockResolvedValue({
+      id: `cs_${prefix}_renew`,
+      url: "https://checkout.stripe.com/synthetic-renewal",
+    });
     const stripe = {
       subscriptions: { list: subscriptions },
       checkout: {
         sessions: {
-          retrieve: vi
-            .fn()
-            .mockResolvedValue({
-              status: "complete",
-              subscription: "sub_ended",
-            }),
+          retrieve: vi.fn().mockResolvedValue({
+            status: "complete",
+            subscription: "sub_ended",
+          }),
           create,
         },
       },

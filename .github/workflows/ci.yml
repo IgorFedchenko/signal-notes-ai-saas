@@ -16,20 +16,47 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm audit --audit-level=high
+      - name: Install pinned OSS secret scanner
+        run: scripts/install-gitleaks.sh
+      - name: Scan repository history for secrets
+        run: gitleaks git --redact --no-banner
+      - name: Verify scanner negative control
+        run: node scripts/check-secret-scanner.mjs
       - run: npm run check
+      - name: Actual pre-commit and bundle scanner negative controls
+        run: node scripts/check-repository-gates.mjs
       - name: Start isolated Supabase and seed synthetic data
         run: npm run local:setup
+      - name: Actual source and deployed SQL boundary negative controls
+        run: node --env-file=.env.local scripts/check-source-boundaries.mjs
+      - name: Complete offline checks after exact source and SQL restoration
+        run: npm run check
       - name: Real Auth, RLS, concurrency and billing transaction tests
         run: npm run test:db
       - run: npm run build
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: signal_server_service_role_canary_2026
+          STRIPE_SECRET_KEY: signal_server_stripe_key_canary_2026
+          STRIPE_WEBHOOK_SECRET: signal_server_webhook_canary_2026
+          OPENAI_API_KEY: signal_server_model_key_canary_2026
+          SUPABASE_DB_URL: postgresql://synthetic:signal_server_db_password_canary_2026@127.0.0.1:56322/postgres
       - name: Check browser bundles for server secrets
-        run: node --env-file=.env.local scripts/check-client-secrets.mjs
+        run: node scripts/check-client-secrets.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: signal_server_service_role_canary_2026
+          STRIPE_SECRET_KEY: signal_server_stripe_key_canary_2026
+          STRIPE_WEBHOOK_SECRET: signal_server_webhook_canary_2026
+          OPENAI_API_KEY: signal_server_model_key_canary_2026
+          SUPABASE_DB_URL: postgresql://synthetic:signal_server_db_password_canary_2026@127.0.0.1:56322/postgres
       - run: npx playwright install --with-deps chromium
       - name: Browser acceptance — desktop and mobile
         run: npm run test:e2e
@@ -39,9 +66,58 @@ jobs:
         with:
           name: acceptance-evidence
           path: |
+            evals/results/
+            test-results/
             playwright-report/
             docs/screenshots/
           retention-days: 7
       - name: Stop dedicated test stack
         if: always()
         run: npx supabase stop --no-backup
+
+  launcher-and-phoenix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Browser system dependencies and GIF encoder (no app dependencies installed)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          npx --yes --package=@playwright/test@1.64.1 playwright install-deps chromium
+      - name: Whole clean-clone bootstrap, genuine capture, actual Phoenix outage/recovery and shutdown
+        run: |
+          test ! -d node_modules && test ! -d .next && test ! -f .env.local
+          mkdir -p test-results
+          set -o pipefail
+          npm run demo -- --capture --phoenix 2>&1 | tee test-results/launcher-console.log
+      - name: Real startup/ready SIGINT, restart and owner-file lifecycle
+        run: node scripts/check-launcher-lifecycle.mjs
+      - name: Confirm app and dedicated database ports released
+        run: node scripts/check-stopped.mjs
+      - name: Launcher and Phoenix evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-phoenix-evidence
+          path: |
+            test-results/launcher-smoke.json
+            test-results/launcher-phoenix-smoke.json
+            test-results/phoenix-readiness.json
+            test-results/launcher-lifecycle.json
+            demos/signal-notes.gif
+            demos/raw/
+            docs/screenshots/
+          retention-days: 7
+      - name: Stop only the dedicated test stacks
+        if: always()
+        run: |
+          npx --no-install supabase stop --no-backup
+          docker compose --profile observability down

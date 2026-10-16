@@ -1,197 +1,183 @@
 # Signal Notes
 
 [![CI](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml/badge.svg)](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Stack: Next.js · Supabase · Stripe](https://img.shields.io/badge/stack-Next.js_·_Supabase_·_Stripe-315b4c)
 
-**A reference implementation of an AI SaaS: private notes, useful summaries, and predictable subscriptions.**
+**Private notes → evidence-backed takeaways, with authentication, subscriptions and bounded AI usage.**
 
-For clients who need to ship a subscription product without leaving authentication,
-tenant isolation, billing retries, and AI limits as unfinished work. Built with
-**Next.js App Router, TypeScript, Supabase Auth + Postgres, and Stripe test billing**.
-MIT licensed. All demo content is synthetic; no employer or client code, names, or data.
+A small SaaS reference for clients shipping a Next.js product with Supabase Auth/RLS,
+Stripe test billing, durable request keys, and understandable AI limits. All inputs
+are synthetic. MIT licensed; no employer/client code or data.
 
-![Signal Notes workspace with a saved note and persisted summary](docs/screenshots/workspace.png)
+![Real local app: sign in, save a note, inspect evidence and usage, then open test billing](demos/signal-notes.gif)
 
-[Landing page](docs/screenshots/landing.png) · [Mobile workspace](docs/screenshots/mobile.png) · [Verification record](docs/VERIFICATION.md)
+[Mobile](docs/screenshots/mobile.png) · [Verification](docs/VERIFICATION.md) ·
+[Workspace](docs/screenshots/workspace.png) · [Recording provenance](demos/README.md).
 
-## Try it locally
+## Two-minute tour
 
-Prerequisites: Node.js 22–26, npm, and a running Docker engine. From a fresh clone:
+1. Sign in, create a short release note with a decision, date and owner, and save it.
+2. Summarize: expand **Evidence** to see exact source quotes. Reload to see persistence.
+3. Open **Usage & activity**: inspect tokens, estimated cost/exposure, prompt version,
+   latency and trace ID. Free allows 5 summaries; Pro allows 100 per UTC month.
+4. Open **Plan & billing**. Checkout is visibly unavailable until Stripe test settings
+   exist; a redirect never grants Pro access.
+
+The default **local extractive provider** selects source sentences and abstains on
+empty-of-facts/instruction-only inputs. It makes no model calls and costs $0. It is
+not evidence of live LLM quality. Live model/judge, actual Stripe-hosted test payment,
+hosted deployment and public visibility remain [separate pending gates](docs/VERIFICATION.md).
+
+## Run from a clean clone
+
+Node.js 22–26, npm and a running Docker engine are required:
 
 ```sh
 npm run demo
 ```
 
-This installs pinned dependencies, starts this project's isolated Supabase stack,
-applies migrations, seeds a demo account and note, and starts Next.js at
-**http://127.0.0.1:3210**. The initial Docker image download can take a few minutes.
-Sign in as `demo@signal.local` with password `SignalNotes-Demo-2026!`, or create
-your own local account. These are disposable local credentials, never hosted credentials.
+The launcher installs locked dependencies, starts this project's isolated Supabase,
+applies migrations, seeds synthetic data and starts Next.js at **http://127.0.0.1:3210**.
+Sign in as `demo@signal.local` / `SignalNotes-Demo-2026!`, or create a local account.
+These disposable credentials are never for a hosted service. The first image download
+may take several minutes. Owner-managed `.env.local` files are never overwritten.
 
-The default **local extractive demo** selects the first three sentences. It does
-not call an LLM, consume API credits, or pretend to be a model response. The same
-reservation and persistence path is used by the optional real LLM adapter.
-Stripe checkout is visibly unavailable until test credentials are configured.
-
-On Igor's Studio host, run the entry point through the shared heavy-job queue:
+**Ctrl+C stops the app and its dedicated stack.** Recovery: `npm run local:stop`;
+if Phoenix was enabled, `docker compose --profile observability down`.
+Ports: app 3210, Supabase API 56321, Postgres 56322, local mail 56324.
 
 ```sh
-~/.local/bin/studio-heavy-run -- npm run demo
+npm run demo -- --smoke            # whole bootstrap, real HTTP/Auth/DB smoke, shutdown
+npm run demo -- --smoke --phoenix  # also read actual route spans back from Phoenix
+npm run demo -- --capture          # real UI → GIF; needs ffmpeg + Chromium system libs
 ```
-
-Stop the app with Ctrl+C. Stop its Docker stack with `npm run local:stop`
-(also through the wrapper on Studio). Supabase ports: API `56321`, Postgres `56322`,
-local mail inbox `56324`. Other local stacks are not modified. The launcher refuses
-to overwrite an owner-managed `.env.local`.
-
-## What works
-
-- Email/password signup, login, logout, server-validated identity and cookie refresh.
-- Create, read and delete private plain-text notes; read persisted summary history.
-- Atomic per-user quotas: Free **5**, Pro **100** summaries per UTC calendar month.
-- Durable request keys, concurrent reservation limits, failure recovery and actual
-  provider-reported input/output token counts (zero for local extraction).
-- Stripe test Checkout, hosted customer portal, signed webhooks and transactional
-  subscription reconciliation. Repeated checkout clicks reuse an open session.
-- Responsive desktop and mobile UI, with explicit unavailable/error/limit states.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Browser[Browser] --> Next[Next.js App Router]
+    Browser --> Next[Next.js routes]
     Next --> Auth[Supabase Auth]
-    Next -->|user JWT + RLS| DB[(Supabase Postgres)]
-    Next -->|server-only reserve / finish| Quota[Atomic quota RPCs]
-    Quota --> DB
-    Next --> AI[Local extraction or approved LLM]
+    Next -->|user JWT + RLS| DB[(Postgres)]
+    Next --> Reserve[Atomic count + cost reservation]
+    Reserve --> DB
+    Reserve --> Permit[Acknowledged unexpired attempt CAS]
+    Permit --> Model[Local extraction / approved model]
+    Model --> Validate[Strict JSON + original evidence]
+    Validate --> Persist[Result + usage settlement]
+    Persist --> DB
+    Next -. safe spans .-> Phoenix[Optional local Phoenix]
     Next --> Checkout[Stripe test Checkout / Portal]
-    Stripe[Signed Stripe webhook] --> Verify[Raw-body signature verification]
-    Verify --> Lock[Postgres customer lock]
-    Lock --> Current[Read current Stripe subscriptions]
-    Current --> Commit[Commit entitlement + event receipt]
+    Stripe[Signed webhook] --> Lock[Customer transaction lock]
+    Lock --> Current[Read canonical Stripe state]
+    Current --> Commit[Entitlement + unique event receipt]
     Commit --> DB
 ```
 
-`src/app` contains pages and HTTP boundaries. `src/lib` contains auth, AI, metering
-orchestration and billing. The migration under `supabase/migrations` defines the
-schema, permissions and transactional quota functions. No separate backend or
-background worker is required for these bounded synchronous requests.
+Pages/routes stay in `src/app`; focused views in `src/components/workspace`; contract,
+prompt/provider/prices in `src/lib/ai`; safe logs and explicit OTel spans in
+`src/lib/observability`. Additive SQL migrations own authorization and ledger invariants.
+No vector DB, worker queue, retrieval, agents or model tools.
 
-## Reliability and security
+## Reliability, privacy and money
 
-**Tenant isolation.** Note operations use the current user's JWT, never a service
-key. Every exposed table has RLS. Users can only read their billing and usage rows;
-they cannot write entitlements, token counts or webhook receipts. RLS tests sign
-in as two real Supabase Auth users and attempt foreign reads/deletes, forged owners,
-ownership transfers, billing escalation and direct metering RPC calls.
+- **Isolation:** immutable notes use user JWTs and RLS. Users cannot write billing,
+  metering or webhook receipts. Elevated credentials stay server-only.
+- **Bounded attempts:** one provider call, zero automatic retries/tools; full serialized
+  UTF-8 input ≤65,536 bytes; output default 800 tokens, hard maximum 2,000; timeout 25s,
+  reservation TTL 2 minutes. Unknown model/price/cap fails before networking.
+- **Fencing:** only a positive DB attempt acknowledgement permits a call. Its frozen
+  snapshot binds model, dated rates, caps and UTC month. Success retries return saved
+  results; failed/expired/ambiguous IDs cannot start another provider call.
+- **Cost:** reserve conservative maximum exposure, settle successful reported tokens.
+  Free holds at most **$0.10** and Pro **$2** estimated exposure per month. Attempted
+  failures/timeouts keep maximum unknown exposure, even after freeing their count slot;
+  late workers cannot refund it. These integer micro-USD estimates are not provider bills.
+  Local extraction is $0. Historical records explicitly have unknown costs.
+- **Deletion:** a DB trigger removes source-derived summary/evidence for API and direct
+  user-JWT deletes. IDs, usage and costs remain. Coordinated finalization prevents late
+  text resurrection; history labels the note deleted.
+- **AI boundaries:** strict schema and exact original quotes, explicit insufficient
+  outcome, versioned prompt/hash/model/schema. Notes are untrusted data; React escapes
+  output. Exact quotes alone do not prove a claim is true or defeat every injection.
+- **Billing:** Stripe test keys/events only, raw signature verification, unique receipts,
+  customer transaction locks, canonical current-state reconciliation and checkout reuse.
+  Upstream failure rolls back the receipt; delayed events cannot restore stale access.
+- **Observability:** allowlisted JSON and real generation/reserve/provider/persist spans;
+  no note, prompt, response/evidence, email, cookie, key or arbitrary Error serialization.
+  Export off by default; exporter outage does not fail a summary.
 
-**Secrets.** Service-role access is confined to `server-only` modules and metering
-RPCs after authentication and note ownership checks. Stripe and database credentials
-also remain server-only. CI scans browser build assets for configured server secrets.
-The only public Supabase values are its URL and publishable/anon key; RLS is required.
+See four short [architecture decisions](docs/adr/001-postgres-boundaries.md) and
+[deployment/cutover notes](docs/DEPLOYMENT.md). Exactly-once external model execution
+is not promised. Conservative unknown exposure may require operator reconciliation.
 
-**AI usage.** A database advisory lock serializes each user's reservation check.
-The reservation counts toward quota before generation starts. A successful result
-is persisted before returning; retrying the same request returns the saved result.
-Failure releases the slot; a crashed reservation expires after two minutes.
-Expired/failed request keys cannot be reused by a late worker. The provider timeout
-is 25 seconds; input is limited to 12,000 characters and output to 400 model tokens.
-No automatic provider retries: a timed-out request may already have cost tokens.
-User instructions inside notes are untrusted data; the model has no tools.
-
-**Billing.** Only `sk_test_` keys and non-live webhook events are accepted. The
-raw body is verified with Stripe's SDK and timestamp tolerance. Checkout binds a
-customer to the authenticated account, locks that account, reuses open sessions,
-and refuses another subscription when one already exists. The server chooses the
-price and return URLs. Redirect parameters never grant Pro access.
-
-**Webhooks.** Processing holds a Postgres transaction lock per customer while
-reading current Stripe state, then commits entitlements and the unique event ID
-together. Duplicate delivery exits without another update or Stripe read. Older
-events still read current Stripe state, so their old payload cannot roll billing
-back. Errors roll back the receipt and return a retryable non-2xx response. No raw
-webhook/card payloads are stored. Unknown customers are acknowledged and ignored.
-Past-due/canceled/expired subscriptions have Free access; period-end cancellation
-keeps Pro until the current paid period ends.
-
-**HTTP boundaries.** State-changing browser routes require an exact configured
-Origin and revalidate the user. JSON bodies are bounded and schema-validated.
-Notes and summaries are plain text rendered with React escaping. Sensitive API
-errors are sanitized; logs exclude note content, credentials and provider payloads.
-Authenticated responses are private and not cached. See [deployment notes](docs/DEPLOYMENT.md).
-
-## Stripe test setup
-
-The owner supplies test credentials locally in an ignored `.env.local`; never send
-them in chat or commit them. Start from [.env.example](.env.example).
-
-1. Create a recurring **monthly USD 12** test price in Stripe. Set
-   `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, and `STRIPE_WEBHOOK_SECRET`.
-2. Enable the Stripe customer portal with cancellation and payment-method management.
-   Do not enable unrelated prices or arbitrary subscription switches.
-3. Supply `SUPABASE_DB_URL` (local DSN or hosted Supabase transaction pooler DSN).
-   The webhook uses a real Postgres transaction; prepared statements are disabled
-   for transaction pooling. Hosted connections verify TLS certificates.
-4. For local test events, run Stripe CLI forwarding:
-
-   ```sh
-   stripe listen --forward-to http://127.0.0.1:3210/api/stripe/webhook \
-     --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted
-   ```
-
-5. Restart Next.js, sign in, open **Plan & billing**, and select **Try Pro in test mode**.
-   Use Stripe's [test payment details](https://docs.stripe.com/testing), then refresh
-   the plan after delivery. Verify cancellation in the portal and replay the same event.
-
-The synthetic test suite verifies signatures and real database effects without a
-Stripe account. It does **not** claim an actual Stripe-hosted payment was completed.
-That roundtrip requires the owner's test account.
-
-## Optional real LLM
-
-Only after the owner approves the API key and its use, set `AI_PROVIDER=openai`,
-`OPENAI_API_KEY` and `OPENAI_MODEL` in the server environment. Restart Next.js.
-Notes are then sent to that configured provider. Tests mock recorded response
-shapes and never use a real API key. Set provider-side spending limits before a
-public demo. The repository itself does not provision a key or approve spending.
-
-## Verification
+## Evaluation and checks
 
 ```sh
-npm run check           # ESLint, TypeScript, unit tests
-npm run local:setup     # dedicated Supabase, migrations and synthetic seed
-npm run test:db         # real Auth/RLS + concurrent quota/billing tests
+npm run check            # format, lint, types, unit, recorded evaluator + negative controls
+npm run hooks:install    # staged format + fast checks; no Docker/build/browser in hook
+npm run local:setup
+npm run test:db          # real local Supabase Auth/RLS/quotas/billing transactions
 npm run build
 node --env-file=.env.local scripts/check-client-secrets.mjs
 npx playwright install chromium
-npm run test:e2e        # production build, desktop + mobile Chromium
+npm run test:e2e         # actual app/Auth/DB, local extraction, desktop + mobile
 ```
 
-On Studio, builds, Docker setup and browser tests use `studio-heavy-run`. GitHub
-Actions runs these on a standard Ubuntu runner, using local Supabase and mocked
-external responses. No hosted credentials or paid model calls are needed. Browser
-tests assert persisted database state and save screenshots as a CI artifact.
+The [frozen evaluator](evals/README.md) contains **12 synthetic cases / 40 facts**:
+6 normal, 4 fact-plus-attack, 2 insufficient. Manual canonical responses validate the
+harness: schema/exact evidence and fact-source support 100%, precision 1.0, macro recall
+≥0.85 and each factual case ≥0.67, attack leakage 0. Negative controls must fail their
+named gates. Actual local-provider kind/evidence checks are reported separately.
+This is contract/evaluator evidence, not live model quality or a live judge verdict.
 
-## Scope and limits
+GitHub CI runs these checks plus actual DB/browser tests, dependency audit, pinned OSS
+Gitleaks scan/negative twin, whole-launch shutdown and optional Phoenix readback.
+Dependabot covers npm/Actions weekly. CodeQL analysis is public-only and is skipped
+while private; native public secret scanning awaits publication approval. No paid
+security upgrade or model key is used in CI.
 
-- This is a reference implementation, not an operated production service. Repository
-  publication awaits owner review. A hosted demo requires owner-provided access.
-- Notes are immutable after creation; create a new note to revise content. The UI
-  lists the latest 100 notes and 200 generation records. Monthly usage is queried
-  separately, so history truncation cannot hide consumed quota.
-- Summary quota uses UTC calendar months, independently of the Stripe invoice date.
-  Upgrades increase the current month's cap; they do not erase consumption.
-- Exactly-once model execution across a process crash is impossible without provider
-  support. A crash after provider completion but before persistence may require a new
-  call. Usage records contain actual tokens only for successfully persisted results;
-  they are not a substitute for the provider's financial ledger.
-- Billing intentionally refuses ambiguous multiple active Pro subscriptions and more
-  than 100 subscriptions per customer. Such accounts require operator review.
-- No paid operation, live Stripe key, scheduler, file upload, organization sharing,
-  document search, or production-grade abuse prevention is included. Before opening
-  public signup, configure email confirmation/SMTP, CAPTCHA, rate limiting, retention,
-  monitoring and provider spend controls. No real personal data belongs in this demo.
-- Free hosting has usage limits. [Vercel Hobby](https://vercel.com/docs/plans/hobby)
-  is restricted to non-commercial personal use; confirm this demo fits before deploying.
+[Verified at `9195e721`](docs/VERIFICATION.md): 132 light tests, 36 real DB tests,
+eight desktop/mobile browser tests, and seven deliberate source/SQL mutations caught
+by their focused checks. Exact source and deployed SQL restoration preceded the
+passing full suite. Manual responses and judge-score fixtures do not establish live
+model quality.
 
-Built by Igor Fedchenko. See [portfolio copy](docs/PORTFOLIO.md) and [delivery criteria](docs/PLAN.md).
+## Optional services
+
+**Phoenix:** `npm run demo -- --smoke --phoenix` uses pinned image 20.22.0 plus digest,
+loopback `http://127.0.0.1:56006`, ephemeral storage and no cloud account. For an
+owner-managed app, set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` to the controlled OTLP HTTP
+endpoint (local `/v1/traces`). Never put auth values in URL query/userinfo.
+
+**Stripe test mode:** create a monthly USD 12 recurring test price, enable the customer
+portal for that price, and provide `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`,
+`STRIPE_WEBHOOK_SECRET` and `SUPABASE_DB_URL` in ignored server settings. Forward the
+four handled events using Stripe CLI:
+
+```sh
+stripe listen --forward-to http://127.0.0.1:3210/api/stripe/webhook --events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted
+```
+
+Sign in,
+choose **Try Pro in test mode**, complete an actual hosted test checkout and verify
+its webhook before claiming payment acceptance. No such roundtrip is claimed yet.
+
+**Live model/judge:** owner consent, a provisioned key, current supported snapshot/rates
+and one approved persistent candidate+judge budget ≤$1 are prerequisites. See
+[the fail-closed live runner contract](evals/README.md). Key presence is not consent.
+App-live generation additionally requires explicit spend allocation and
+`AI_PROVIDER=openai`, approved server config and `AI_LIVE_APPROVED=true`.
+The checked-in snapshot is a dated reference to reverify, not permission to use it.
+
+## Scope
+
+A reference implementation, not an operated hosted service. Latest 100 notes and 200
+history rows are displayed; monthly totals query the full ledger separately. Quotas
+reset on UTC calendar months, independent of invoice dates. Hosted Auth/SMTP, public
+signup abuse controls and free-host eligibility require owner-assisted deployment.
+No uploads, organization sharing, real personal data, paid infrastructure or Stripe
+live payments. Repository visibility stays private until owner review.
+
+Built by Igor Fedchenko · [Portfolio copy](docs/PORTFOLIO.md) · [Changelog](CHANGELOG.md)

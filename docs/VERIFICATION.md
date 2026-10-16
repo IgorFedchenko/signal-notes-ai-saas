@@ -1,62 +1,79 @@
-# Verification record
+# Verification and evidence boundaries
 
-Application revision: `223cfc1723576d28a4166ea88410ee0f93c6c74f`.
-Full acceptance: [GitHub Actions run 38816000124](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38816000124), successful on 2026-10-15 UTC / 2026-10-16 Asia/Yerevan.
+All checks use synthetic data. The default app runs local sentence extraction;
+manual oracle outputs and provider doubles establish contracts, not live LLM quality.
+See [current Actions](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/workflows/ci.yml)
+for the exact revision and required job status.
 
-| Check                           | Evidence                                                                      |
-| ------------------------------- | ----------------------------------------------------------------------------- |
-| ESLint + TypeScript             | Passed locally and on Ubuntu / Node 24                                        |
-| Unit/API boundary tests         | 14 passed                                                                     |
-| Real Supabase integration tests | 12 passed; separate Auth users and real Postgres                              |
-| Playwright                      | 6 passed, desktop and mobile Chromium, against the production build           |
-| Next.js production build        | Passed                                                                        |
-| Browser secret check            | Configured server credentials absent from `.next/static`                      |
-| Dependency audit                | 0 vulnerabilities, including development dependencies                         |
-| Synthetic screenshots           | Captured from this successful browser run; committed under `docs/screenshots` |
+Local/offline verification passed at
+[`9195e721`](https://github.com/IgorFedchenko/signal-notes-ai-saas/tree/9195e7219e5cd8fe4b66d6eaf9340e969b416f47)
+on 2026-10-16. Both required jobs passed in
+[run 38830344251](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38830344251):
+**132 light tests, 36 real database tests, eight desktop/mobile browser tests**, and
+the **12-case / 40-fact evaluator with 11 named negative controls**. The full checks
+ran after all seven deliberate source mutations were detected and restored. The
+separate clean-launch/Phoenix job also passed. These results cover the local reference;
+external model, judge, hosted payment, hosting and publication gates remain pending.
 
-The original DB test configuration also included the unit suite, reporting 26
-passes (12 integration + 14 unit). Its include configuration now runs only the
-12 integration tests; the unit suite remains a separate CI step.
+| Lane                      | Executed boundary                                                                                                                                                                        | Limit                                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Output/provider contracts | Strict schema/cardinality, original Unicode quotes, reported usage, serialized caps, one-call and refusal/truncation/error handling                                                      | Transport doubles and one actual 25-second hanging loopback endpoint; no model network                              |
+| Real database             | Actual Supabase JWT/RLS, Free5/Pro100, positive exposure/settlement, committed begin with lost acknowledgement, timeout/expiry, direct owner deletion and late finalization              | Controlled synthetic rows and SQL interleavings, no hosted data                                                     |
+| Migration/UTC             | Empty and baseline-seeded additive upgrades, byte-identical original migration, actual old service-role RPC denial; old/new UTC ledgers                                                  | Minimal Auth scaffold and clock substitution only in disposable migration databases; genuine Auth tested separately |
+| App browser               | Signup/login/logout, two users, persistence/replay, exact evidence/metrics, insufficient outcomes, literal HTML, sixth-request denial, deletion and responsive controls                  | Real Next/Auth/Postgres/local provider; desktop and iPhone viewport; no intercepted responses                       |
+| Evaluator                 | 12 manual canonical cases/40 facts, 11 named negative twins, source-span evidence support, numeric denominators and actual local-provider kind/evidence checks                           | Narrow frozen lexical oracle; manual output is not recorded live output                                             |
+| Judge/spending contract   | Strict 0–4 rubric/complete case parser, factual-only means, durable shared spending arithmetic, process lock and crash/restart                                                           | Labeled offline scores; no actual judge verdict or external spend                                                   |
+| Billing                   | Raw Stripe SDK signatures and signed handler, duplicates/out-of-order/rollback, real DB customer locks and concurrent checkout reuse                                                     | Stripe API doubled; no hosted Checkout/Portal payment                                                               |
+| Phoenix/privacy           | Actual route=response/DB/Phoenix trace ID; root plus reserve/provider/persist children with parents/statuses; stopped collector still permits saved summary, recovery exports next trace | Pinned local Phoenix20.22.0; synthetic logs/SDK/span canaries; no tracing cloud                                     |
+| Launcher                  | Whole command from clean checkout, startup/ready SIGINT, documented restart, ports/owned resources and owner-file preservation                                                           | Dedicated ephemeral local stack; setup-error subprocess boundary additionally doubled                               |
+| Repository gates          | Format/lint/types, dependency audit, OSS Gitleaks with negative twin, actual bad/corrected git-hook commits and client bundle/source-map canaries                                        | CodeQL analysis skipped while private; native public scanning pending                                               |
+| Media                     | Genuine 16-second GIF, current workspace/mobile, exact hashes/revisions                                                                                                                  | Synthetic identity, local extraction, unavailable billing; see [provenance](../demos/README.md)                     |
 
-## Observed acceptance
+## Mutation checks
 
-- Signup creates a real Auth identity and billing account. Login/logout work with
-  Supabase cookies; an anonymous request is rejected.
-- Saving a note creates a real Postgres row. A summary is persisted independently
-  of React state and survives a page reload.
-- Free users receive five summaries and then a disabled action with a limit state.
-  Concurrent database requests also stop exactly at five active reservations.
-- Two users cannot read/delete each other's notes, forge an owner, transfer a row,
-  write a billing plan, inspect webhook receipts or invoke privileged metering RPCs.
-- Provider failure releases quota. Expired requests cannot be finalized by a late
-  worker. A repeated successful request returns the stored summary.
-- Stripe SDK accepts a valid signature and rejects changed bodies and expired
-  timestamps. Live keys are rejected before network access.
-- Six concurrent deliveries of one billing event produce one canonical Stripe read
-  and one database revision. Delayed events read current state, and upstream failure
-  rolls back the receipt so a retry can commit.
-- Concurrent checkout requests reuse an open hosted-session test double; canceled
-  subscriptions can start a new session. Unrelated customers cannot gain access.
-- The browser exercises signup, create, summarize, persisted history, usage, plan
-  disclosure, quota exhaustion, delete, logout and password login. Landing/pricing
-  and the main workspace fit desktop and mobile widths.
+Seven deliberate changes to actual source were exercised at `9195e721`. Four changed
+SQL functions were deployed to the dedicated test database before the focused check.
+Each change produced its intended assertion failure (**exit 1**), followed by exact
+source restoration and the **same command passing, exit 0**. All four deployed SQL
+function definitions also matched their original hashes after restoration.
 
-## External acceptance still pending
+| Boundary                 | Deliberate break                                                 | Observed failure                                                 |
+| ------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Original evidence        | Removed exact-source quote rejection                             | Six non-original quotes no longer threw the required error       |
+| Attempt fence            | Removed the SQL not-attempted predicate                          | Four positive acknowledgements instead of one                    |
+| Unknown cost exposure    | Released exposure after an attempted failure                     | Ledger exposure was 17 instead of 100000 micro-USD               |
+| Deletion privacy         | Removed SQL summary/result clearing, preserving the deleted flag | Legacy summary text remained after direct owner-JWT deletion     |
+| Free quota               | Raised the SQL maximum from five to six                          | Six concurrent requests were admitted instead of five            |
+| Telemetry privacy        | Recorded a poisoned Error through the real SDK                   | A synthetic canary appeared in captured SDK spans                |
+| Evaluator contradictions | Treated unknown/contradictory clauses as supported               | A changed-owner response lost its required contradiction failure |
 
-- Actual Stripe-hosted test Checkout and customer portal roundtrip: owner test
-  credentials are not configured. Database tests use mocked Stripe reads and
-  synthetic signed events; they do not establish an actual hosted payment.
-- Live LLM response: no API key or paid call was used. The real provider adapter is
-  tested with recorded response shapes; the default UI uses disclosed local extraction.
-- Hosted Vercel/Supabase URL: no owner-provided access has been confirmed. No hosted
-  deployment, paid resource or externally accessible demo has been created.
-- Publication: the GitHub repository remains private until Igor explicitly approves
-  making it public after reviewing the result.
+The [acceptance artifact](https://github.com/IgorFedchenko/signal-notes-ai-saas/actions/runs/38830344251/artifacts/12016508901)
+contains the seven diffs, red/green logs and hash receipts under
+`test-results/source-boundaries`. After restoration, the same job passed the complete
+format/lint/type/unit/evaluator/database/build/bundle/browser suite. No test expectation,
+corpus or threshold was weakened, and no mutant remains in the committed source.
+These focused checks demonstrate detection of these seven broken boundaries; they do
+not establish general semantic correctness or universal injection protection.
 
-The initial browser run failed on an exact text selector for a label containing
-nested explanatory text. The selector was changed to inspect its banner container;
-the full flow then passed on both viewports. No acceptance assertions were removed.
+The actual collector outage completed the summary with HTTP200 and saved DB output
+in about one second, then a subsequent trace returned all four spans after recovery.
+App/exporter stdout and returned spans passed source/auth canary checks. Earlier
+receiver startup failures were corrected by waiting for its database-backed `/readyz`
+endpoint; a running container alone did not establish receiver readiness.
 
-Heavy execution ran on GitHub's standard Ubuntu runner. Studio's shared queue
-remained occupied; this task's waiting local setup was canceled before execution.
-No existing Studio job was interrupted and no queue was bypassed.
+The committed GIF, workspace and mobile images retain their actual `602b4d0` capture
+provenance; the landing image comes from `34c694d`. Exact media hashes and source runs
+remain in
+[media.json](../demos/media.json).
+
+Live candidate evaluation and LLM-as-judge require explicit owner approval, a supported
+dated snapshot, provisioned key and one combined persistent spending cap. Actual
+Stripe-hosted test payment, hosted Auth/deployment and public visibility/scanning also
+remain pending owner prerequisites. No fixture, skipped job, redirect or local Docker
+result passes those gates. The result is a local reference, not full AI/hosted SaaS
+acceptance or a promise of semantic correctness or universal injection protection.
+
+Reproduce with README commands and inspect the run artifacts: evaluator results,
+DB ledgers/migration receipts, browser traces/screenshots, hook controls, real Phoenix
+readback/outage/lifecycle and original recording. Browser files live under
+`test-results/browser` so earlier database receipts survive browser startup.

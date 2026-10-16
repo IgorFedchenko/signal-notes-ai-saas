@@ -1,0 +1,105 @@
+{
+  "provenance": "synthetic/manual",
+  "authoredOn": "2026-10-16",
+  "datasetVersion": "signal-notes-smoke-v1",
+  "responses": {
+    "N01": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team approved the launch. The launch date is 2026-11-02. Mira owns the launch. The launch budget is 120 USD.",
+          "evidence": "The team approved the launch. The launch date is 2026-11-02. Mira owns the launch. The launch budget is 120 USD."
+        }
+      ]
+    },
+    "N02": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team chose the blue deployment. The deployment date is 2026-11-04. Jonas owns the deployment. The deployment has 8 workers.",
+          "evidence": "The team chose the blue deployment. The deployment date is 2026-11-04. Jonas owns the deployment. The deployment has 8 workers."
+        }
+      ]
+    },
+    "N03": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team did not approve the migration. The migration review date is 2026-11-06. Amara owns the review. The review covers 12 tables.",
+          "evidence": "The team did not approve the migration. The migration review date is 2026-11-06. Amara owns the review. The review covers 12 tables."
+        }
+      ]
+    },
+    "N04": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team selected café packaging. The packaging date is 2026-11-08. Zoë owns the packaging. The batch contains 24 units.",
+          "evidence": "The team selected café packaging. The packaging date is 2026-11-08. Zoë owns the packaging. The batch contains 24 units."
+        }
+      ]
+    },
+    "N05": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team approved the backup. The backup date is 2026-11-10. Ольга owns the backup. The backup retains 30 copies.",
+          "evidence": "The team approved the backup. The backup date is 2026-11-10. Ольга owns the backup. The backup retains 30 copies."
+        }
+      ]
+    },
+    "N06": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team chose the latency fix. The fix date is 2026-11-12. Ravi owns the fix. The target latency is 80 ms.",
+          "evidence": "The team chose the latency fix. The fix date is 2026-11-12. Ravi owns the fix. The target latency is 80 ms."
+        }
+      ]
+    },
+    "X01": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team approved the audit. The audit date is 2026-11-14. Mina owns the audit. The audit covers 6 services.",
+          "evidence": "The team approved the audit. The audit date is 2026-11-14. Mina owns the audit. The audit covers 6 services."
+        }
+      ]
+    },
+    "X02": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team approved the release. The release date is 2026-11-16. Leo owns the release. The release contains 3 patches.",
+          "evidence": "The team approved the release. The release date is 2026-11-16. Leo owns the release. The release contains 3 patches."
+        }
+      ]
+    },
+    "X03": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team approved the invoice review. The invoice review date is 2026-11-18. Sara owns the review. The review covers 15 invoices.",
+          "evidence": "The team approved the invoice review. The invoice review date is 2026-11-18. Sara owns the review. The review covers 15 invoices."
+        }
+      ]
+    },
+    "X04": {
+      "kind": "summary",
+      "takeaways": [
+        {
+          "text": "The team rejected the rollout. The rollout review date is 2026-11-20. Noor owns the review. The review covers 40 devices.",
+          "evidence": "The team rejected the rollout. The rollout review date is 2026-11-20. Noor owns the review. The review covers 40 devices."
+        }
+      ]
+    },
+    "I01": {
+      "kind": "insufficient_content",
+      "takeaways": []
+    },
+    "I02": {
+      "kind": "insufficient_content",
+      "takeaways": []
+    }
+  }
+}
