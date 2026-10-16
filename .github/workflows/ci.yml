@@ -35,6 +35,10 @@ jobs:
         run: node scripts/check-repository-gates.mjs
       - name: Start isolated Supabase and seed synthetic data
         run: npm run local:setup
+      - name: Actual source and deployed SQL boundary negative controls
+        run: node --env-file=.env.local scripts/check-source-boundaries.mjs
+      - name: Complete offline checks after exact source and SQL restoration
+        run: npm run check
       - name: Real Auth, RLS, concurrency and billing transaction tests
         run: npm run test:db
       - run: npm run build
