@@ -39,7 +39,7 @@ not evidence of live LLM quality. Live model/judge calls, Stripe-hosted payment 
 cloud deployment are **outside this case's scope**. No external credentials or
 services are needed for the local reference. See [evidence boundaries](docs/VERIFICATION.md).
 
-## Run from a clean clone
+## Run locally
 
 Node.js 22–26, npm and a running Docker engine are required:
 
@@ -122,7 +122,7 @@ See the [architecture map and four decisions](docs/ARCHITECTURE.md) and
 [deployment/cutover notes](docs/DEPLOYMENT.md). Exactly-once external model execution
 is not promised. Conservative unknown exposure may require operator reconciliation.
 
-## Evaluation and checks
+## Verification
 
 ```sh
 npm run check            # format, lint, types, unit, recorded evaluator + negative controls
@@ -171,7 +171,7 @@ No Stripe-hosted checkout, live generation or live judge verdict is claimed or r
 Keep `AI_PROVIDER=fixture`; optional adapter configuration is documented separately in
 [deployment notes](docs/DEPLOYMENT.md) and the [evaluation contract](evals/README.md).
 
-## Scope
+## Limitations
 
 A reference implementation, not an operated hosted service. Latest 100 notes and 200
 history rows are displayed; monthly totals query the full ledger separately. Quotas
