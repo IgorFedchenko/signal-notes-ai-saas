@@ -15,6 +15,15 @@ are synthetic. MIT licensed; no employer/client code or data.
 [Architecture](docs/ARCHITECTURE.md) · [Testing](docs/TESTING.md) · [Verification](docs/VERIFICATION.md) ·
 [Workspace](docs/screenshots/workspace.png) · [Recording provenance](demos/README.md).
 
+## Integration status
+
+| Status                       | Components                                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Runs locally                 | Next.js, Supabase Auth/Postgres/RLS and extractive summaries.                                                                 |
+| Implemented, live-unverified | OpenAI adapter and Stripe test Checkout/Portal/webhook integration code; tests use local doubles and signed synthetic events. |
+| Optional, off by default     | Local Phoenix tracing.                                                                                                        |
+| Outside this demo            | Live model/judge calls, hosted payments and a cloud deployment.                                                               |
+
 ## Two-minute tour
 
 1. Sign in, create a short release note with a decision, date and owner, and save it.
@@ -135,10 +144,11 @@ This is contract/evaluator evidence, not live model quality or a live judge verd
 
 The prepared GitHub workflow covers these checks plus actual DB/browser tests,
 dependency audit, pinned OSS Gitleaks scan/negative twin, whole-launch shutdown and
-optional Phoenix readback. **Actions are disabled while this repository is private**;
+optional Phoenix readback. **GitHub Actions remain disabled, including after publication**;
 every CI/CodeQL job is also guarded before runner allocation. Verification runs locally,
-with no private Actions minutes or paid calls. Dependabot is configured weekly for
-npm/Actions. CodeQL and native public scanning are future public-repository features,
+with no Actions minutes or paid calls. Automatic Dependabot version updates are disabled;
+the [weekly configuration](docs/examples/dependabot.yml) is an inactive opt-in example.
+CodeQL and native public scanning are optional public-repository features,
 not required local acceptance checks.
 
 [Verified at `9195e721`](docs/VERIFICATION.md): 132 light tests, 36 real DB tests,
@@ -168,6 +178,6 @@ history rows are displayed; monthly totals query the full ledger separately. Quo
 reset on UTC calendar months, independent of invoice dates. Hosted Auth/SMTP, public
 signup abuse controls and hosting eligibility would need a separate deployment review.
 No uploads, organization sharing, real personal data, paid infrastructure or Stripe
-live payments. Repository visibility stays private until the common portfolio review.
+live payments. The local demo and its fixtures are independent portfolio work.
 
 Built by Igor Fedchenko · [Mobile screenshot](docs/screenshots/mobile.png) · [Changelog](CHANGELOG.md)

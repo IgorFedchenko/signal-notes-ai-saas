@@ -83,10 +83,13 @@ workflow pins the scanner archive for Linux; use a trusted host installation loc
 
 ## Automation policy
 
-Actions are disabled while private, and every CI/CodeQL job has a public-only guard
+Actions remain disabled after publication, and every CI/CodeQL job has a public-only guard
 before runner allocation. Do not dispatch/rerun private Actions or rely on free minutes.
 The prepared workflow documents the complete automation path; earlier successful
 runs remain [historical evidence](VERIFICATION.md). Current acceptance runs locally.
 CodeQL and native public secret scanning are outside local acceptance while private.
 Live model/judge, hosted payment and cloud deployment have been removed from this
 case's scope; skipped optional integrations are never counted as passed tests.
+
+Automatic Dependabot version updates stay disabled. The configuration in
+[examples](examples/dependabot.yml) is inactive and requires owner approval before activation.
