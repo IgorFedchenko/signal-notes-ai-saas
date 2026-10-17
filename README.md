@@ -44,6 +44,8 @@ services are needed for the local reference. See [evidence boundaries](docs/VERI
 Node.js 22–26, npm and a running Docker engine are required:
 
 ```sh
+git clone https://github.com/IgorFedchenko/signal-notes-ai-saas.git
+cd signal-notes-ai-saas
 npm run demo
 ```
 
